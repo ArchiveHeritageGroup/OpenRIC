@@ -16,11 +16,19 @@ class HomeController extends Controller
 
     public function index(): View
     {
-        $health = $this->triplestore->health();
-        $tripleCount = $health['online'] ? $this->triplestore->countTriples() : 0;
+        $fusekiOnline = false;
+        $tripleCount = 0;
+
+        try {
+            $health = $this->triplestore->health();
+            $fusekiOnline = $health['online'] ?? false;
+            $tripleCount = $fusekiOnline ? $this->triplestore->countTriples() : 0;
+        } catch (\Exception) {
+            // Fuseki may not be reachable — show page anyway
+        }
 
         return view('theme::home', [
-            'fusekiOnline' => $health['online'],
+            'fusekiOnline' => $fusekiOnline,
             'tripleCount' => $tripleCount,
         ]);
     }

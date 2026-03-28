@@ -357,7 +357,7 @@ class SearchService implements SearchServiceInterface
             return [
                 'from' => $offset,
                 'size' => $limit,
-                'query' => ['match_all' => (object) []],
+                'query' => ['match_all' => new \stdClass()],
                 '_source' => self::SOURCE_FIELDS,
             ];
         }
