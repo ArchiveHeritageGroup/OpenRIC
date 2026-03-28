@@ -1,0 +1,24 @@
+{
+    "name": "openric/integrity",
+    "description": "RDF integrity checks and validation for OpenRiC triplestore data",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Integrity\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Integrity\\Providers\\IntegrityServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

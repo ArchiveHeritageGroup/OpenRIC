@@ -1,0 +1,24 @@
+{
+    "name": "openric/research-request",
+    "description": "Research request cart and approval workflow for OpenRiC",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\ResearchRequest\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\ResearchRequest\\Providers\\ResearchRequestServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

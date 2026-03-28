@@ -1,0 +1,24 @@
+{
+    "name": "openric/help",
+    "description": "Built-in help system with searchable topics for OpenRiC",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Help\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Help\\Providers\\HelpServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

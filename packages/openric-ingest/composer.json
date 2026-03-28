@@ -1,0 +1,24 @@
+{
+    "name": "openric/ingest",
+    "description": "CSV, EAD3, and EAC-CPF ingest for OpenRiC with column mapping and validation",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Ingest\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Ingest\\Providers\\IngestServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

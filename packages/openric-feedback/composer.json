@@ -1,0 +1,24 @@
+{
+    "name": "openric/feedback",
+    "description": "User feedback submission and admin review for OpenRiC",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Feedback\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Feedback\\Providers\\FeedbackServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

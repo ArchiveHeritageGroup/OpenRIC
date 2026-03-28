@@ -40,7 +40,19 @@
         "openric/digital-object": "@dev",
         "openric/accession": "@dev",
         "openric/donor": "@dev",
-        "openric/dedupe": "@dev"
+        "openric/dedupe": "@dev",
+        "openric/favorites": "@dev",
+        "openric/research-request": "@dev",
+        "openric/landing-page": "@dev",
+        "openric/feedback": "@dev",
+        "openric/dropdown-manage": "@dev",
+        "openric/custom-fields": "@dev",
+        "openric/backup": "@dev",
+        "openric/jobs-manage": "@dev",
+        "openric/ingest": "@dev",
+        "openric/doi-manage": "@dev",
+        "openric/integrity": "@dev",
+        "openric/help": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

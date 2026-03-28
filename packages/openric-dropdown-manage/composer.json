@@ -1,0 +1,24 @@
+{
+    "name": "openric/dropdown-manage",
+    "description": "Admin UI for managing dropdown taxonomies and term values in OpenRiC",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\DropdownManage\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\DropdownManage\\Providers\\DropdownManageServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -21,20 +21,24 @@ class MandateController extends Controller
     {
         $limit = (int) $request->get('limit', 25);
         $offset = (int) $request->get('offset', 0);
-        $result = $this->service->browse($request->only(['q']), $limit, $offset);
+        $filters = $request->only(['q', 'mandate_type', 'agent_iri']);
+        $result = $this->service->browse($filters, $limit, $offset);
 
         return view('activity-manage::mandates.index', [
             'items' => $result['items'],
             'total' => $result['total'],
             'limit' => $limit,
             'offset' => $offset,
+            'filters' => $filters,
         ]);
     }
 
     public function show(string $iri): View
     {
         $entity = $this->service->find($iri);
-        if ($entity === null) { abort(404); }
+        if ($entity === null) {
+            abort(404);
+        }
 
         return view('activity-manage::mandates.show', [
             'entity' => $entity,
@@ -49,28 +53,56 @@ class MandateController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['title' => 'required|string|max:1000', 'identifier' => 'nullable|string|max:255']);
+        $data = $request->validate([
+            'title'              => 'required|string|max:1000',
+            'identifier'         => 'nullable|string|max:255',
+            'mandate_type'       => 'nullable|string|max:2048',
+            'date_iri'           => 'nullable|string|max:2048',
+            'beginning_date'     => 'nullable|string|max:255',
+            'end_date'           => 'nullable|string|max:255',
+            'descriptive_note'   => 'nullable|string|max:5000',
+            'regulated_by_iris'   => 'nullable|array',
+            'regulated_by_iris.*' => 'string|max:2048',
+        ]);
+
         $user = Auth::user();
         $iri = $this->service->create($data, $user->getIri(), 'Created via OpenRiC UI');
 
-        return redirect()->route('mandates.show', ['iri' => urlencode($iri)])->with('success', 'Mandate created.');
+        return redirect()
+            ->route('mandates.show', ['iri' => urlencode($iri)])
+            ->with('success', 'Mandate created.');
     }
 
     public function edit(string $iri): View
     {
         $entity = $this->service->find($iri);
-        if ($entity === null) { abort(404); }
+        if ($entity === null) {
+            abort(404);
+        }
 
         return view('activity-manage::mandates.edit', ['entity' => $entity]);
     }
 
     public function update(Request $request, string $iri): RedirectResponse
     {
-        $data = $request->validate(['title' => 'required|string|max:1000', 'identifier' => 'nullable|string|max:255']);
+        $data = $request->validate([
+            'title'              => 'required|string|max:1000',
+            'identifier'         => 'nullable|string|max:255',
+            'mandate_type'       => 'nullable|string|max:2048',
+            'date_iri'           => 'nullable|string|max:2048',
+            'beginning_date'     => 'nullable|string|max:255',
+            'end_date'           => 'nullable|string|max:255',
+            'descriptive_note'   => 'nullable|string|max:5000',
+            'regulated_by_iris'   => 'nullable|array',
+            'regulated_by_iris.*' => 'string|max:2048',
+        ]);
+
         $user = Auth::user();
         $this->service->update($iri, $data, $user->getIri(), 'Updated via OpenRiC UI');
 
-        return redirect()->route('mandates.show', ['iri' => urlencode($iri)])->with('success', 'Mandate updated.');
+        return redirect()
+            ->route('mandates.show', ['iri' => urlencode($iri)])
+            ->with('success', 'Mandate updated.');
     }
 
     public function destroy(string $iri): RedirectResponse
@@ -78,6 +110,23 @@ class MandateController extends Controller
         $user = Auth::user();
         $this->service->delete($iri, $user->getIri(), 'Deleted via OpenRiC UI');
 
-        return redirect()->route('mandates.index')->with('success', 'Mandate deleted.');
+        return redirect()
+            ->route('mandates.index')
+            ->with('success', 'Mandate deleted.');
+    }
+
+    public function forAgent(Request $request, string $agentIri): View
+    {
+        $limit = (int) $request->get('limit', 25);
+        $offset = (int) $request->get('offset', 0);
+        $result = $this->service->getForAgent($agentIri, $limit, $offset);
+
+        return view('activity-manage::mandates.for-agent', [
+            'items' => $result['items'],
+            'total' => $result['total'],
+            'limit' => $limit,
+            'offset' => $offset,
+            'agentIri' => $agentIri,
+        ]);
     }
 }
