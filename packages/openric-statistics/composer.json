@@ -1,0 +1,27 @@
+{
+    "name": "openric/statistics",
+    "description": "Usage statistics: views, downloads, geographic breakdown, bot filtering, CSV export for OpenRiC",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev"
+    },
+    "suggest": {
+        "geoip2/geoip2": "For GeoIP-based country/city resolution"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Statistics\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Statistics\\Providers\\OpenRiCStatisticsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
