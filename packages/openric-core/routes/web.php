@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Support\Facades\Route;
 use OpenRiC\Core\Controllers\MappingController;
+use OpenRiC\Core\Controllers\OaiPmhController;
 use OpenRiC\Core\Controllers\RelationshipController;
 
 Route::middleware(['web', 'auth.required', 'acl:read'])->prefix('relationships')->group(function () {
@@ -13,3 +14,5 @@ Route::middleware(['web', 'auth.required', 'acl:read'])->prefix('relationships')
 });
 
 Route::middleware(['web', 'auth.required'])->get('/admin/mappings', [MappingController::class, 'index'])->name('admin.mappings');
+
+Route::match(['get', 'post'], '/oai', [OaiPmhController::class, 'handle'])->name('oai')->withoutMiddleware(['web']);

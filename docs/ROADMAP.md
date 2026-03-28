@@ -95,13 +95,13 @@ A standalone, RiC-O native archival platform with plugin architecture. Every arc
 
 ---
 
-## Phase 5 — Discovery (v0.5)
+## Phase 5 — Discovery (v0.5) — COMPLETE
 
-- [ ] Full-text search via OpenSearch
-- [ ] SPARQL endpoint (public, read-only)
-- [ ] Semantic search via Qdrant
-- [ ] OAI-PMH harvesting endpoint
-- [ ] Faceted browse
+- [x] Full-text search via Elasticsearch (SearchService 913 lines, fuzzy/wildcard/phrase, field boosting)
+- [x] SPARQL endpoint (public, read-only, CORS-enabled, query form UI)
+- [x] Semantic search via Qdrant (vector similarity in SearchService)
+- [x] OAI-PMH 2.0 harvesting endpoint (adapted from Heratio 927-line controller, 6 verbs, Dublin Core from RiC-O)
+- [x] Faceted browse (SPARQL-driven, entity type + creator facets, sorting, pagination)
 
 ---
 

@@ -6,7 +6,9 @@ namespace OpenRiC\Search\Providers;
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
+use OpenRiC\Search\Contracts\FacetedBrowseServiceInterface;
 use OpenRiC\Search\Contracts\SearchServiceInterface;
+use OpenRiC\Search\Services\FacetedBrowseService;
 use OpenRiC\Search\Services\SearchService;
 
 class SearchServiceProvider extends ServiceProvider
@@ -14,6 +16,7 @@ class SearchServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(SearchServiceInterface::class, SearchService::class);
+        $this->app->singleton(FacetedBrowseServiceInterface::class, FacetedBrowseService::class);
     }
 
     public function boot(): void
