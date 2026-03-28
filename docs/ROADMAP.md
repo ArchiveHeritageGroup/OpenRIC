@@ -82,13 +82,16 @@ A standalone, RiC-O native archival platform with plugin architecture. Every arc
 
 ---
 
-## Phase 4 — Provenance + Audit (v0.4)
+## Phase 4 — Provenance + Audit (v0.4) — COMPLETE
 
-- [ ] RDF-Star annotation on every triple write
-- [ ] Audit trail — who changed what triple, when
-- [ ] Description history view per record
-- [ ] PROV-O mapping for description provenance
-- [ ] Certainty/confidence annotation on relationships
+- [x] RDF-Star annotation on every triple write (FusekiTriplestoreService, 870 lines)
+- [x] Audit trail — full AuditService adapted from Heratio (301 lines), statistics, export, entity history
+- [x] Description history view — combined RDF-Star + PostgreSQL audit_log timeline
+- [x] Description-as-Record model per RiC-CM Section 6 / EGAD guidance
+- [x] PROV-O mapping (prov:wasAttributedTo on description records)
+- [x] Certainty/confidence annotations on relationships via RDF-Star (CertaintyService)
+- [x] Provenance Activity model — 8 activity types with timeline, custody chain, agent activities (423 lines, adapted from Heratio ric_provenance.py)
+- [x] All services rewritten from Heratio source: SecurityClearanceService (407), WorkflowService (898), SearchService (913), AuthorityService (790), ProvenanceService (423), AuditService (301)
 
 ---
 

@@ -18,3 +18,6 @@ interface ProvenanceServiceInterface
 
     public function getActivityTypes(): array;
 }
+// Note: PROV-O integration is handled within createActivity and createDescriptionRecord
+// prov:wasGeneratedBy, prov:wasAttributedTo, prov:wasGeneratedAtTime are written
+// alongside RiC-O Activity triples for full provenance compliance.
