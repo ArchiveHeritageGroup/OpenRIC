@@ -1,0 +1,1122 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OpenRiC\Repository\Services;
+
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use OpenRiC\Repository\Contracts\RepositoryServiceInterface;
+
+/**
+ * Full CRUD service for archival-institution (repository) records.
+ *
+ * Adapted from Heratio ahg-repository-manage RepositoryService.
+ * Uses PostgreSQL with the AtoM class-table-inheritance schema:
+ *   object -> actor -> repository  (+ actor_i18n, repository_i18n, contact_information, etc.)
+ *
+ * All ISDIAH fields are persisted via actor_i18n (ISAAR identity) and repository_i18n (ISDIAH-specific).
+ */
+class RepositoryService implements RepositoryServiceInterface
+{
+    protected string $culture;
+
+    public function __construct(?string $culture = null)
+    {
+        $this->culture = $culture ?? app()->getLocale();
+    }
+
+    // =====================================================================
+    //  READ — single record
+    // =====================================================================
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getBySlug(string $slug): ?object
+    {
+        $objectId = DB::table('slug')->where('slug', $slug)->value('object_id');
+        if (!$objectId) {
+            return null;
+        }
+
+        return $this->getById((int) $objectId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getById(int $id): ?object
+    {
+        return DB::table('repository')
+            ->join('actor', 'repository.id', '=', 'actor.id')
+            ->join('object', 'repository.id', '=', 'object.id')
+            ->join('slug', 'repository.id', '=', 'slug.object_id')
+            ->leftJoin('actor_i18n', function ($j) {
+                $j->on('repository.id', '=', 'actor_i18n.id')
+                    ->where('actor_i18n.culture', '=', $this->culture);
+            })
+            ->leftJoin('repository_i18n', function ($j) {
+                $j->on('repository.id', '=', 'repository_i18n.id')
+                    ->where('repository_i18n.culture', '=', $this->culture);
+            })
+            ->where('repository.id', $id)
+            ->where('object.class_name', 'QubitRepository')
+            ->select([
+                'repository.id',
+                'repository.identifier',
+                'repository.desc_status_id',
+                'repository.desc_detail_id',
+                'repository.desc_identifier',
+                'repository.upload_limit',
+                'repository.source_culture',
+                'actor.entity_type_id',
+                'actor.description_status_id',
+                'actor.description_detail_id',
+                'actor.description_identifier',
+                'actor.source_standard',
+                'actor.corporate_body_identifiers',
+                'actor.parent_id',
+                // Actor i18n (ISAAR)
+                'actor_i18n.authorized_form_of_name',
+                'actor_i18n.dates_of_existence',
+                'actor_i18n.history',
+                'actor_i18n.places',
+                'actor_i18n.legal_status',
+                'actor_i18n.functions',
+                'actor_i18n.mandates',
+                'actor_i18n.internal_structures',
+                'actor_i18n.general_context',
+                'actor_i18n.institution_responsible_identifier',
+                'actor_i18n.rules',
+                'actor_i18n.sources',
+                'actor_i18n.revision_history',
+                // Repository i18n (ISDIAH)
+                'repository_i18n.geocultural_context',
+                'repository_i18n.collecting_policies',
+                'repository_i18n.buildings',
+                'repository_i18n.holdings',
+                'repository_i18n.finding_aids',
+                'repository_i18n.opening_times',
+                'repository_i18n.access_conditions',
+                'repository_i18n.disabled_access',
+                'repository_i18n.research_services',
+                'repository_i18n.reproduction_services',
+                'repository_i18n.public_facilities',
+                'repository_i18n.desc_institution_identifier',
+                'repository_i18n.desc_rules',
+                'repository_i18n.desc_sources',
+                'repository_i18n.desc_revision_history',
+                // Object
+                'object.created_at',
+                'object.updated_at',
+                'object.serial_number',
+                'slug.slug',
+            ])
+            ->first();
+    }
+
+    // =====================================================================
+    //  READ — related data
+    // =====================================================================
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getContacts(int $repoId): Collection
+    {
+        return DB::table('contact_information')
+            ->leftJoin('contact_information_i18n', function ($j) {
+                $j->on('contact_information.id', '=', 'contact_information_i18n.id')
+                    ->where('contact_information_i18n.culture', '=', $this->culture);
+            })
+            ->where('contact_information.actor_id', $repoId)
+            ->select([
+                'contact_information.id',
+                'contact_information.primary_contact',
+                'contact_information.contact_person',
+                'contact_information.street_address',
+                'contact_information.website',
+                'contact_information.email',
+                'contact_information.telephone',
+                'contact_information.fax',
+                'contact_information.postal_code',
+                'contact_information.country_code',
+                'contact_information.longitude',
+                'contact_information.latitude',
+                'contact_information.contact_note',
+                'contact_information_i18n.contact_type',
+                'contact_information_i18n.city',
+                'contact_information_i18n.region',
+                'contact_information_i18n.note',
+            ])
+            ->get();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getDigitalObjects(int $repoId): array
+    {
+        $rows = DB::table('digital_object')
+            ->where('object_id', $repoId)
+            ->select(['id', 'object_id', 'name', 'path', 'mime_type', 'byte_size', 'checksum'])
+            ->get();
+
+        return $rows->map(fn ($r) => (array) $r)->toArray();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getHoldingsCount(int $repoId): int
+    {
+        return DB::table('information_object')
+            ->where('repository_id', $repoId)
+            ->where('id', '!=', 1)
+            ->count();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getHoldingsPaginated(int $repoId, int $perPage = 10, int $page = 1): LengthAwarePaginator
+    {
+        return DB::table('information_object')
+            ->leftJoin('information_object_i18n', function ($j) {
+                $j->on('information_object.id', '=', 'information_object_i18n.id')
+                    ->where('information_object_i18n.culture', '=', $this->culture);
+            })
+            ->leftJoin('slug', 'information_object.id', '=', 'slug.object_id')
+            ->where('information_object.repository_id', $repoId)
+            ->where('information_object.parent_id', 1) // top-level only
+            ->where('information_object.id', '!=', 1)
+            ->select(
+                'information_object.id',
+                'information_object_i18n.title',
+                'slug.slug'
+            )
+            ->orderBy('information_object_i18n.title')
+            ->paginate($perPage, ['*'], 'holdings_page', $page);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getTermName(?int $termId): ?string
+    {
+        if (!$termId) {
+            return null;
+        }
+
+        return DB::table('term_i18n')
+            ->where('id', $termId)
+            ->where('culture', $this->culture)
+            ->value('name');
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getOtherNames(int $repoId): Collection
+    {
+        return DB::table('other_name')
+            ->leftJoin('other_name_i18n', function ($j) {
+                $j->on('other_name.id', '=', 'other_name_i18n.id')
+                    ->where('other_name_i18n.culture', '=', $this->culture);
+            })
+            ->where('other_name.object_id', $repoId)
+            ->select(
+                'other_name.id',
+                'other_name.type_id',
+                'other_name_i18n.name'
+            )
+            ->get();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getRepositoryTypes(int $repoId): Collection
+    {
+        return DB::table('object_term_relation')
+            ->join('term', 'object_term_relation.term_id', '=', 'term.id')
+            ->leftJoin('term_i18n', function ($j) {
+                $j->on('term.id', '=', 'term_i18n.id')
+                    ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('object_term_relation.object_id', $repoId)
+            ->where('term.taxonomy_id', 38) // Repository Types
+            ->select('term.id', 'term_i18n.name')
+            ->get();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getLanguages(int $repoId): array
+    {
+        $row = DB::table('property')
+            ->leftJoin('property_i18n', function ($j) {
+                $j->on('property.id', '=', 'property_i18n.id')
+                    ->where('property_i18n.culture', '=', $this->culture);
+            })
+            ->where('property.object_id', $repoId)
+            ->where('property.name', 'language')
+            ->value('property_i18n.value');
+
+        if (!$row) {
+            return [];
+        }
+
+        $decoded = @unserialize($row);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+
+        return [$row];
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getScripts(int $repoId): array
+    {
+        $row = DB::table('property')
+            ->leftJoin('property_i18n', function ($j) {
+                $j->on('property.id', '=', 'property_i18n.id')
+                    ->where('property_i18n.culture', '=', $this->culture);
+            })
+            ->where('property.object_id', $repoId)
+            ->where('property.name', 'script')
+            ->value('property_i18n.value');
+
+        if (!$row) {
+            return [];
+        }
+
+        $decoded = @unserialize($row);
+        if (is_array($decoded)) {
+            return $decoded;
+        }
+
+        return [$row];
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getMaintenanceNotes(int $repoId): ?string
+    {
+        return DB::table('note')
+            ->join('note_i18n', 'note.id', '=', 'note_i18n.id')
+            ->where('note.object_id', $repoId)
+            ->where('note.type_id', 174)
+            ->where('note_i18n.culture', $this->culture)
+            ->value('note_i18n.content');
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getThematicAreas(int $repoId): Collection
+    {
+        return DB::table('object_term_relation')
+            ->join('term', 'object_term_relation.term_id', '=', 'term.id')
+            ->leftJoin('term_i18n', function ($j) {
+                $j->on('term.id', '=', 'term_i18n.id')
+                    ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('object_term_relation.object_id', $repoId)
+            ->where('term.taxonomy_id', 72) // Thematic Area
+            ->select('term.id', 'term_i18n.name')
+            ->get();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getGeographicSubregions(int $repoId): Collection
+    {
+        return DB::table('object_term_relation')
+            ->join('term', 'object_term_relation.term_id', '=', 'term.id')
+            ->leftJoin('term_i18n', function ($j) {
+                $j->on('term.id', '=', 'term_i18n.id')
+                    ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('object_term_relation.object_id', $repoId)
+            ->where('term.taxonomy_id', 73) // Geographic Subregion
+            ->select('term.id', 'term_i18n.name')
+            ->get();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getMaintainedActors(int $repoId, int $perPage = 10, int $page = 1): ?array
+    {
+        $pager = DB::table('actor')
+            ->leftJoin('actor_i18n', function ($j) {
+                $j->on('actor.id', '=', 'actor_i18n.id')
+                    ->where('actor_i18n.culture', '=', $this->culture);
+            })
+            ->leftJoin('slug', 'actor.id', '=', 'slug.object_id')
+            ->join('object', 'actor.id', '=', 'object.id')
+            ->where('object.class_name', 'QubitActor')
+            ->where(function ($q) use ($repoId) {
+                $q->whereIn('actor.id', function ($sub) use ($repoId) {
+                    $sub->select('id')
+                        ->from('actor')
+                        ->where('parent_id', $repoId);
+                })
+                ->orWhereIn('actor.id', function ($sub) use ($repoId) {
+                    $sub->select('object_id')
+                        ->from('property')
+                        ->join('property_i18n', 'property.id', '=', 'property_i18n.id')
+                        ->where('property.name', 'maintainingRepositoryId')
+                        ->where('property_i18n.value', (string) $repoId);
+                });
+            })
+            ->where('actor.id', '!=', 3) // Exclude ROOT actor
+            ->select(
+                'actor.id',
+                'actor_i18n.authorized_form_of_name',
+                'slug.slug'
+            )
+            ->orderBy('actor_i18n.authorized_form_of_name')
+            ->paginate($perPage, ['*'], 'actors_page', $page);
+
+        if ($pager->total() === 0) {
+            return null;
+        }
+
+        $slug = $this->getSlug($repoId);
+
+        return [
+            'label'   => __('Maintained actors'),
+            'moreUrl' => route('actor.browse', ['repository' => $repoId]),
+            'dataUrl' => route('repository.show', ['slug' => $slug]),
+            'pager'   => $pager,
+            'items'   => $pager->getCollection(),
+        ];
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getFormChoices(): array
+    {
+        $termLookup = function (int $taxonomyId): Collection {
+            return DB::table('term')
+                ->leftJoin('term_i18n', function ($j) {
+                    $j->on('term.id', '=', 'term_i18n.id')
+                        ->where('term_i18n.culture', '=', $this->culture);
+                })
+                ->where('term.taxonomy_id', $taxonomyId)
+                ->select('term.id', 'term_i18n.name')
+                ->orderBy('term_i18n.name')
+                ->get();
+        };
+
+        return [
+            'descriptionStatuses' => $termLookup(33),  // Description Statuses
+            'descriptionDetails'  => $termLookup(31),  // Description Detail Levels
+        ];
+    }
+
+    // =====================================================================
+    //  CREATE
+    // =====================================================================
+
+    /**
+     * {@inheritDoc}
+     */
+    public function create(array $data): int
+    {
+        return DB::transaction(function () use ($data): int {
+            // 1. Create object record
+            $id = DB::table('object')->insertGetId([
+                'class_name'    => 'QubitRepository',
+                'created_at'    => now(),
+                'updated_at'    => now(),
+                'serial_number' => 0,
+            ]);
+
+            // 2. Generate unique slug
+            $baseSlug = Str::slug($data['authorized_form_of_name'] ?? 'untitled');
+            $slug = $baseSlug;
+            $counter = 1;
+            while (DB::table('slug')->where('slug', $slug)->exists()) {
+                $slug = $baseSlug . '-' . $counter;
+                $counter++;
+            }
+            DB::table('slug')->insert(['object_id' => $id, 'slug' => $slug]);
+
+            // 3. Create actor record (class table inheritance)
+            DB::table('actor')->insert([
+                'id'             => $id,
+                'entity_type_id' => 131, // Corporate body — repositories are always corporate bodies
+                'parent_id'      => 3,   // QubitActor::ROOT_ID
+                'source_culture' => $this->culture,
+            ]);
+
+            // 4. Create repository record
+            DB::table('repository')->insert([
+                'id'             => $id,
+                'identifier'     => $data['identifier'] ?? null,
+                'desc_status_id' => $data['desc_status_id'] ?? null,
+                'desc_detail_id' => $data['desc_detail_id'] ?? null,
+                'desc_identifier' => $data['desc_identifier'] ?? null,
+                'upload_limit'   => $data['upload_limit'] ?? null,
+                'source_culture' => $this->culture,
+            ]);
+
+            // 5. Save actor_i18n (ISAAR fields)
+            DB::table('actor_i18n')->insert([
+                'id'                                  => $id,
+                'culture'                             => $this->culture,
+                'authorized_form_of_name'             => $data['authorized_form_of_name'] ?? null,
+                'dates_of_existence'                  => $data['dates_of_existence'] ?? null,
+                'history'                             => $data['history'] ?? null,
+                'places'                              => $data['places'] ?? null,
+                'legal_status'                        => $data['legal_status'] ?? null,
+                'functions'                           => $data['functions'] ?? null,
+                'mandates'                            => $data['mandates'] ?? null,
+                'internal_structures'                 => $data['internal_structures'] ?? null,
+                'general_context'                     => $data['general_context'] ?? null,
+                'institution_responsible_identifier'  => $data['institution_responsible_identifier'] ?? null,
+                'rules'                               => $data['rules'] ?? null,
+                'sources'                             => $data['sources'] ?? null,
+                'revision_history'                    => $data['revision_history'] ?? null,
+            ]);
+
+            // 6. Save repository_i18n (ISDIAH fields)
+            DB::table('repository_i18n')->insert([
+                'id'                          => $id,
+                'culture'                     => $this->culture,
+                'geocultural_context'         => $data['geocultural_context'] ?? null,
+                'collecting_policies'         => $data['collecting_policies'] ?? null,
+                'buildings'                   => $data['buildings'] ?? null,
+                'holdings'                    => $data['holdings'] ?? null,
+                'finding_aids'                => $data['finding_aids'] ?? null,
+                'opening_times'               => $data['opening_times'] ?? null,
+                'access_conditions'           => $data['access_conditions'] ?? null,
+                'disabled_access'             => $data['disabled_access'] ?? null,
+                'research_services'           => $data['research_services'] ?? null,
+                'reproduction_services'       => $data['reproduction_services'] ?? null,
+                'public_facilities'           => $data['public_facilities'] ?? null,
+                'desc_institution_identifier' => $data['desc_institution_identifier'] ?? null,
+                'desc_rules'                  => $data['desc_rules'] ?? null,
+                'desc_sources'                => $data['desc_sources'] ?? null,
+                'desc_revision_history'       => $data['desc_revision_history'] ?? null,
+            ]);
+
+            // 7. Save parallel name(s) (other_name table, type_id 148)
+            if (!empty($data['parallel_name'])) {
+                $this->saveOtherName($id, $data['parallel_name'], 148);
+            }
+
+            // 8. Save other name(s) (other_name table, type_id 149)
+            if (!empty($data['other_name'])) {
+                $this->saveOtherName($id, $data['other_name'], 149);
+            }
+
+            // 9. Save maintenance notes (note table, type_id 174)
+            if (!empty($data['maintenance_notes'])) {
+                $this->saveMaintenanceNotes($id, $data['maintenance_notes']);
+            }
+
+            // 10. Save contacts if provided
+            if (!empty($data['contacts'])) {
+                $this->saveContacts($id, $data['contacts']);
+            }
+
+            return $id;
+        });
+    }
+
+    // =====================================================================
+    //  UPDATE
+    // =====================================================================
+
+    /**
+     * {@inheritDoc}
+     */
+    public function update(int $id, array $data): void
+    {
+        DB::transaction(function () use ($id, $data): void {
+            // 1. Update repository record
+            $repoUpdate = [];
+            foreach (['identifier', 'desc_status_id', 'desc_detail_id', 'desc_identifier', 'upload_limit'] as $field) {
+                if (array_key_exists($field, $data)) {
+                    $repoUpdate[$field] = $data[$field];
+                }
+            }
+            if (!empty($repoUpdate)) {
+                DB::table('repository')->where('id', $id)->update($repoUpdate);
+            }
+
+            // 2. Update actor_i18n (ISAAR fields) — upsert
+            $actorI18nFields = [
+                'authorized_form_of_name', 'dates_of_existence', 'history', 'places',
+                'legal_status', 'functions', 'mandates', 'internal_structures',
+                'general_context', 'institution_responsible_identifier', 'rules',
+                'sources', 'revision_history',
+            ];
+            $actorI18n = [];
+            foreach ($actorI18nFields as $field) {
+                if (array_key_exists($field, $data)) {
+                    $actorI18n[$field] = $data[$field];
+                }
+            }
+            if (!empty($actorI18n)) {
+                $this->upsertI18n('actor_i18n', $id, $actorI18n);
+            }
+
+            // 3. Update repository_i18n (ISDIAH fields) — upsert
+            $repoI18nFields = [
+                'geocultural_context', 'collecting_policies', 'buildings', 'holdings',
+                'finding_aids', 'opening_times', 'access_conditions', 'disabled_access',
+                'research_services', 'reproduction_services', 'public_facilities',
+                'desc_institution_identifier', 'desc_rules', 'desc_sources', 'desc_revision_history',
+            ];
+            $repoI18n = [];
+            foreach ($repoI18nFields as $field) {
+                if (array_key_exists($field, $data)) {
+                    $repoI18n[$field] = $data[$field];
+                }
+            }
+            if (!empty($repoI18n)) {
+                $this->upsertI18n('repository_i18n', $id, $repoI18n);
+            }
+
+            // 4. Sync parallel name(s) (other_name table, type_id 148)
+            if (array_key_exists('parallel_name', $data)) {
+                $this->syncOtherName($id, $data['parallel_name'], 148);
+            }
+
+            // 5. Sync other name(s) (other_name table, type_id 149)
+            if (array_key_exists('other_name', $data)) {
+                $this->syncOtherName($id, $data['other_name'], 149);
+            }
+
+            // 6. Sync maintenance notes (note table, type_id 174)
+            if (array_key_exists('maintenance_notes', $data)) {
+                $this->syncMaintenanceNotes($id, $data['maintenance_notes']);
+            }
+
+            // 7. Sync contacts if provided
+            if (array_key_exists('contacts', $data)) {
+                $this->syncContacts($id, $data['contacts']);
+            }
+
+            // 8. Touch the object record
+            DB::table('object')->where('id', $id)->update([
+                'updated_at'    => now(),
+                'serial_number' => DB::raw('serial_number + 1'),
+            ]);
+        });
+    }
+
+    // =====================================================================
+    //  DELETE
+    // =====================================================================
+
+    /**
+     * {@inheritDoc}
+     */
+    public function delete(int $id): void
+    {
+        DB::transaction(function () use ($id): void {
+            // 1. Delete contact information
+            $contactIds = DB::table('contact_information')->where('actor_id', $id)->pluck('id')->toArray();
+            if (!empty($contactIds)) {
+                DB::table('contact_information_i18n')->whereIn('id', $contactIds)->delete();
+                DB::table('contact_information')->whereIn('id', $contactIds)->delete();
+            }
+
+            // 2. Delete relations
+            $relationIds = DB::table('relation')
+                ->where('subject_id', $id)->orWhere('object_id', $id)
+                ->pluck('id')->toArray();
+            if (!empty($relationIds)) {
+                DB::table('relation_i18n')->whereIn('id', $relationIds)->delete();
+                DB::table('relation')->whereIn('id', $relationIds)->delete();
+                DB::table('slug')->whereIn('object_id', $relationIds)->delete();
+                DB::table('object')->whereIn('id', $relationIds)->delete();
+            }
+
+            // 3. Delete other names (parallel, other forms)
+            $otherNameIds = DB::table('other_name')->where('object_id', $id)->pluck('id')->toArray();
+            if (!empty($otherNameIds)) {
+                DB::table('other_name_i18n')->whereIn('id', $otherNameIds)->delete();
+                DB::table('other_name')->whereIn('id', $otherNameIds)->delete();
+            }
+
+            // 4. Delete notes
+            $noteIds = DB::table('note')->where('object_id', $id)->pluck('id')->toArray();
+            if (!empty($noteIds)) {
+                DB::table('note_i18n')->whereIn('id', $noteIds)->delete();
+                DB::table('note')->whereIn('id', $noteIds)->delete();
+                DB::table('object')->whereIn('id', $noteIds)->delete();
+            }
+
+            // 5. Delete term relations (access points)
+            DB::table('object_term_relation')->where('object_id', $id)->delete();
+
+            // 6. Delete repository_i18n
+            DB::table('repository_i18n')->where('id', $id)->delete();
+
+            // 7. Delete actor_i18n
+            DB::table('actor_i18n')->where('id', $id)->delete();
+
+            // 8. Delete repository record
+            DB::table('repository')->where('id', $id)->delete();
+
+            // 9. Delete actor record
+            DB::table('actor')->where('id', $id)->delete();
+
+            // 10. Delete slug + object
+            DB::table('slug')->where('object_id', $id)->delete();
+            DB::table('object')->where('id', $id)->delete();
+        });
+    }
+
+    // =====================================================================
+    //  SLUG
+    // =====================================================================
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getSlug(int $id): ?string
+    {
+        return DB::table('slug')->where('object_id', $id)->value('slug');
+    }
+
+    // =====================================================================
+    //  THEME
+    // =====================================================================
+
+    /**
+     * {@inheritDoc}
+     */
+    public function updateTheme(int $id, array $data, $request = null): void
+    {
+        DB::transaction(function () use ($id, $data, $request): void {
+            if (isset($data['backgroundColor'])) {
+                $this->upsertSetting($id, 'background_color', $data['backgroundColor']);
+            }
+
+            if (isset($data['htmlSnippet'])) {
+                $this->upsertSetting($id, 'htmlSnippet', $data['htmlSnippet']);
+            }
+
+            // Handle file uploads (banner and logo) if present
+            if ($request && $request->hasFile('banner')) {
+                $path = $request->file('banner')->store('repository/' . $id, 'uploads');
+                $this->upsertSetting($id, 'banner', $path);
+            }
+
+            if ($request && $request->hasFile('logo')) {
+                $path = $request->file('logo')->store('repository/' . $id, 'uploads');
+                $this->upsertSetting($id, 'logo', $path);
+            }
+
+            // Touch the object record
+            DB::table('object')->where('id', $id)->update([
+                'updated_at'    => now(),
+                'serial_number' => DB::raw('serial_number + 1'),
+            ]);
+        });
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getRepositorySetting(int $repositoryId, string $name): ?string
+    {
+        return DB::table('setting')
+            ->join('setting_i18n', function ($j) {
+                $j->on('setting.id', '=', 'setting_i18n.id')
+                  ->where('setting_i18n.culture', '=', $this->culture);
+            })
+            ->where('setting.name', $name)
+            ->where('setting.scope', 'repository_' . $repositoryId)
+            ->value('setting_i18n.value');
+    }
+
+    // =====================================================================
+    //  BROWSE (delegated — see RepositoryBrowseService for faceted search)
+    // =====================================================================
+
+    /**
+     * {@inheritDoc}
+     *
+     * Basic browse is delegated to RepositoryBrowseService; this stub exists
+     * so RepositoryService satisfies the full interface. In practice the
+     * controller instantiates RepositoryBrowseService directly for browse ops.
+     */
+    public function browse(array $params): array
+    {
+        return (new RepositoryBrowseService($this->culture))->browse($params);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function browseAdvanced(array $params): array
+    {
+        return (new RepositoryBrowseService($this->culture))->browseAdvanced($params);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getThematicAreaFacets(): array
+    {
+        return (new RepositoryBrowseService($this->culture))->getThematicAreaFacets();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getRegionFacets(): array
+    {
+        return (new RepositoryBrowseService($this->culture))->getRegionFacets();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getArchiveTypeFacets(): array
+    {
+        return (new RepositoryBrowseService($this->culture))->getArchiveTypeFacets();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getSubregionFacets(): array
+    {
+        return (new RepositoryBrowseService($this->culture))->getSubregionFacets();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getLanguageFacets(): array
+    {
+        return (new RepositoryBrowseService($this->culture))->getLanguageFacets();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public function getLocalityFacets(): array
+    {
+        return (new RepositoryBrowseService($this->culture))->getLocalityFacets();
+    }
+
+    // =====================================================================
+    //  PRIVATE HELPERS
+    // =====================================================================
+
+    /**
+     * Upsert an i18n record (insert or update based on existence).
+     */
+    protected function upsertI18n(string $table, int $id, array $data): void
+    {
+        $exists = DB::table($table)
+            ->where('id', $id)
+            ->where('culture', $this->culture)
+            ->exists();
+
+        if ($exists) {
+            DB::table($table)->where('id', $id)->where('culture', $this->culture)->update($data);
+        } else {
+            DB::table($table)->insert(array_merge(['id' => $id, 'culture' => $this->culture], $data));
+        }
+    }
+
+    /**
+     * Save contacts for a new repository.
+     */
+    protected function saveContacts(int $repoId, array $contacts): void
+    {
+        foreach ($contacts as $contactData) {
+            if ($this->isContactEmpty($contactData)) {
+                continue;
+            }
+
+            $contactId = DB::table('contact_information')->insertGetId([
+                'actor_id'        => $repoId,
+                'primary_contact' => !empty($contactData['primary_contact']) ? 1 : 0,
+                'contact_person'  => $contactData['contact_person'] ?? null,
+                'street_address'  => $contactData['street_address'] ?? null,
+                'website'         => $contactData['website'] ?? null,
+                'email'           => $contactData['email'] ?? null,
+                'telephone'       => $contactData['telephone'] ?? null,
+                'fax'             => $contactData['fax'] ?? null,
+                'postal_code'     => $contactData['postal_code'] ?? null,
+                'country_code'    => $contactData['country_code'] ?? null,
+                'longitude'       => $contactData['longitude'] ?? null,
+                'latitude'        => $contactData['latitude'] ?? null,
+                'contact_note'    => $contactData['contact_note'] ?? null,
+                'created_at'      => now(),
+                'updated_at'      => now(),
+                'source_culture'  => $this->culture,
+                'serial_number'   => 0,
+            ]);
+
+            DB::table('contact_information_i18n')->insert([
+                'id'           => $contactId,
+                'culture'      => $this->culture,
+                'contact_type' => $contactData['contact_type'] ?? null,
+                'city'         => $contactData['city'] ?? null,
+                'region'       => $contactData['region'] ?? null,
+                'note'         => $contactData['note'] ?? null,
+            ]);
+        }
+    }
+
+    /**
+     * Sync contacts for an existing repository (create, update, or delete).
+     */
+    protected function syncContacts(int $repoId, array $contacts): void
+    {
+        foreach ($contacts as $contactData) {
+            if (!empty($contactData['delete']) && !empty($contactData['id'])) {
+                DB::table('contact_information_i18n')->where('id', $contactData['id'])->delete();
+                DB::table('contact_information')->where('id', $contactData['id'])->delete();
+                continue;
+            }
+
+            if ($this->isContactEmpty($contactData)) {
+                continue;
+            }
+
+            if (!empty($contactData['id'])) {
+                DB::table('contact_information')->where('id', $contactData['id'])->update([
+                    'primary_contact' => !empty($contactData['primary_contact']) ? 1 : 0,
+                    'contact_person'  => $contactData['contact_person'] ?? null,
+                    'street_address'  => $contactData['street_address'] ?? null,
+                    'website'         => $contactData['website'] ?? null,
+                    'email'           => $contactData['email'] ?? null,
+                    'telephone'       => $contactData['telephone'] ?? null,
+                    'fax'             => $contactData['fax'] ?? null,
+                    'postal_code'     => $contactData['postal_code'] ?? null,
+                    'country_code'    => $contactData['country_code'] ?? null,
+                    'longitude'       => $contactData['longitude'] ?? null,
+                    'latitude'        => $contactData['latitude'] ?? null,
+                    'contact_note'    => $contactData['contact_note'] ?? null,
+                    'updated_at'      => now(),
+                    'serial_number'   => DB::raw('serial_number + 1'),
+                ]);
+
+                $this->upsertI18n('contact_information_i18n', (int) $contactData['id'], [
+                    'contact_type' => $contactData['contact_type'] ?? null,
+                    'city'         => $contactData['city'] ?? null,
+                    'region'       => $contactData['region'] ?? null,
+                    'note'         => $contactData['note'] ?? null,
+                ]);
+            } else {
+                $this->saveContacts($repoId, [$contactData]);
+            }
+        }
+    }
+
+    /**
+     * Save an other_name record (parallel or other form of name).
+     */
+    protected function saveOtherName(int $objectId, string $name, int $typeId): void
+    {
+        if (trim($name) === '') {
+            return;
+        }
+
+        $otherNameId = DB::table('other_name')->insertGetId([
+            'object_id'      => $objectId,
+            'type_id'        => $typeId,
+            'source_culture' => $this->culture,
+            'serial_number'  => 0,
+        ]);
+
+        DB::table('other_name_i18n')->insert([
+            'id'      => $otherNameId,
+            'culture' => $this->culture,
+            'name'    => trim($name),
+        ]);
+    }
+
+    /**
+     * Sync an other_name record (upsert first, delete if empty).
+     */
+    protected function syncOtherName(int $objectId, ?string $name, int $typeId): void
+    {
+        $existing = DB::table('other_name')
+            ->where('object_id', $objectId)
+            ->where('type_id', $typeId)
+            ->first();
+
+        if (empty(trim($name ?? ''))) {
+            if ($existing) {
+                DB::table('other_name_i18n')->where('id', $existing->id)->delete();
+                DB::table('other_name')->where('id', $existing->id)->delete();
+            }
+            return;
+        }
+
+        if ($existing) {
+            $exists = DB::table('other_name_i18n')
+                ->where('id', $existing->id)
+                ->where('culture', $this->culture)
+                ->exists();
+            if ($exists) {
+                DB::table('other_name_i18n')
+                    ->where('id', $existing->id)
+                    ->where('culture', $this->culture)
+                    ->update(['name' => trim($name)]);
+            } else {
+                DB::table('other_name_i18n')->insert([
+                    'id'      => $existing->id,
+                    'culture' => $this->culture,
+                    'name'    => trim($name),
+                ]);
+            }
+        } else {
+            $this->saveOtherName($objectId, $name, $typeId);
+        }
+    }
+
+    /**
+     * Save maintenance notes (note table, type_id 174).
+     * Notes require their own object record in the AtoM schema.
+     */
+    protected function saveMaintenanceNotes(int $objectId, string $content): void
+    {
+        if (trim($content) === '') {
+            return;
+        }
+
+        $noteObjId = DB::table('object')->insertGetId([
+            'class_name'    => 'QubitNote',
+            'created_at'    => now(),
+            'updated_at'    => now(),
+            'serial_number' => 0,
+        ]);
+
+        DB::table('note')->insert([
+            'object_id'      => $objectId,
+            'type_id'        => 174,
+            'scope'          => null,
+            'user_id'        => null,
+            'id'             => $noteObjId,
+            'source_culture' => $this->culture,
+            'serial_number'  => 0,
+        ]);
+
+        DB::table('note_i18n')->insert([
+            'id'      => $noteObjId,
+            'culture' => $this->culture,
+            'content' => trim($content),
+        ]);
+    }
+
+    /**
+     * Sync maintenance notes (upsert or delete).
+     */
+    protected function syncMaintenanceNotes(int $objectId, ?string $content): void
+    {
+        $existing = DB::table('note')
+            ->where('object_id', $objectId)
+            ->where('type_id', 174)
+            ->first();
+
+        if (empty(trim($content ?? ''))) {
+            if ($existing) {
+                DB::table('note_i18n')->where('id', $existing->id)->delete();
+                DB::table('note')->where('id', $existing->id)->delete();
+                DB::table('object')->where('id', $existing->id)->delete();
+            }
+            return;
+        }
+
+        if ($existing) {
+            $exists = DB::table('note_i18n')
+                ->where('id', $existing->id)
+                ->where('culture', $this->culture)
+                ->exists();
+            if ($exists) {
+                DB::table('note_i18n')
+                    ->where('id', $existing->id)
+                    ->where('culture', $this->culture)
+                    ->update(['content' => trim($content)]);
+            } else {
+                DB::table('note_i18n')->insert([
+                    'id'      => $existing->id,
+                    'culture' => $this->culture,
+                    'content' => trim($content),
+                ]);
+            }
+        } else {
+            $this->saveMaintenanceNotes($objectId, $content);
+        }
+    }
+
+    /**
+     * Check if a contact data array is effectively empty.
+     */
+    protected function isContactEmpty(array $data): bool
+    {
+        foreach (['contact_person', 'street_address', 'website', 'email', 'telephone', 'fax', 'city', 'region', 'postal_code', 'country_code', 'contact_type', 'note'] as $field) {
+            if (!empty($data[$field])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Upsert a setting scoped to a repository.
+     */
+    protected function upsertSetting(int $repositoryId, string $name, string $value): void
+    {
+        $existing = DB::table('setting')
+            ->where('name', $name)
+            ->where('scope', 'repository_' . $repositoryId)
+            ->first();
+
+        if ($existing) {
+            DB::table('setting_i18n')
+                ->where('id', $existing->id)
+                ->where('culture', $this->culture)
+                ->update(['value' => $value]);
+        } else {
+            $objectId = DB::table('object')->insertGetId([
+                'class_name'    => 'QubitSetting',
+                'created_at'    => now(),
+                'updated_at'    => now(),
+                'serial_number' => 0,
+            ]);
+
+            DB::table('setting')->insert([
+                'id'             => $objectId,
+                'name'           => $name,
+                'scope'          => 'repository_' . $repositoryId,
+                'editable'       => 1,
+                'deleteable'     => 1,
+                'source_culture' => $this->culture,
+            ]);
+
+            DB::table('setting_i18n')->insert([
+                'id'      => $objectId,
+                'culture' => $this->culture,
+                'value'   => $value,
+            ]);
+        }
+    }
+}

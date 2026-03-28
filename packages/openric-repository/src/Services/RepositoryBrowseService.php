@@ -1,0 +1,485 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OpenRiC\Repository\Services;
+
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+
+/**
+ * Faceted browse and filtering for archival-institution (repository) records.
+ *
+ * Adapted from Heratio ahg-repository-manage RepositoryBrowseService.
+ * PostgreSQL queries against the AtoM class-table-inheritance schema.
+ */
+class RepositoryBrowseService
+{
+    protected string $culture;
+
+    public function __construct(string $culture)
+    {
+        $this->culture = $culture;
+    }
+
+    // =====================================================================
+    //  BROWSE (basic)
+    // =====================================================================
+
+    /**
+     * Basic browse with pagination, search text, and sort.
+     *
+     * @return array{hits: array, total: int, page: int, limit: int}
+     */
+    public function browse(array $params): array
+    {
+        $page    = max(1, (int) ($params['page'] ?? 1));
+        $limit   = max(1, min(100, (int) ($params['limit'] ?? 30)));
+        $skip    = ($page - 1) * $limit;
+        $sort    = $params['sort'] ?? 'lastUpdated';
+        $sortDir = !empty($params['sortDir']) ? $params['sortDir'] : ($sort === 'lastUpdated' ? 'desc' : 'asc');
+        $subquery = trim($params['subquery'] ?? '');
+
+        try {
+            $query = DB::table('repository');
+            $query = $this->applyBaseJoins($query);
+            $query->select($this->getBaseSelect());
+
+            $query = $this->applySearch($query, $subquery);
+
+            $total = $query->count();
+            $query = $this->applySort($query, $sort, $sortDir);
+            $rows  = $query->skip($skip)->take($limit)->get();
+
+            $hits = [];
+            foreach ($rows as $row) {
+                $hits[] = $this->transformRow($row);
+            }
+
+            return ['hits' => $hits, 'total' => $total, 'page' => $page, 'limit' => $limit];
+        } catch (\Exception $e) {
+            Log::error(static::class . ' browse error: ' . $e->getMessage());
+            return ['hits' => [], 'total' => 0, 'page' => $page, 'limit' => $limit];
+        }
+    }
+
+    // =====================================================================
+    //  BROWSE ADVANCED (all filters)
+    // =====================================================================
+
+    /**
+     * Browse with advanced filters: thematic area, region, locality, archive type,
+     * geographic subregion, digital objects, and language.
+     *
+     * @return array{hits: array, total: int, page: int, limit: int}
+     */
+    public function browseAdvanced(array $params): array
+    {
+        $page    = max(1, (int) ($params['page'] ?? 1));
+        $limit   = max(1, min(100, (int) ($params['limit'] ?? 30)));
+        $skip    = ($page - 1) * $limit;
+        $sort    = $params['sort'] ?? 'alphabetic';
+        $sortDir = !empty($params['sortDir']) ? $params['sortDir'] : ($sort === 'lastUpdated' ? 'desc' : 'asc');
+        $subquery = trim($params['subquery'] ?? '');
+
+        try {
+            $query = DB::table('repository');
+            $query = $this->applyBaseJoins($query);
+            $query->select($this->getBaseSelect());
+
+            $query = $this->applySearch($query, $subquery);
+
+            // Thematic area filter
+            if (!empty($params['thematicArea'])) {
+                $query->whereExists(function ($sub) use ($params) {
+                    $sub->select(DB::raw(1))
+                        ->from('object_term_relation')
+                        ->whereColumn('object_term_relation.object_id', 'repository.id')
+                        ->where('object_term_relation.term_id', (int) $params['thematicArea']);
+                });
+            }
+
+            // Region filter
+            if (!empty($params['region'])) {
+                $query->whereExists(function ($sub) use ($params) {
+                    $sub->select(DB::raw(1))
+                        ->from('contact_information')
+                        ->join('contact_information_i18n', function ($j) {
+                            $j->on('contact_information.id', '=', 'contact_information_i18n.id')
+                              ->where('contact_information_i18n.culture', '=', $this->culture);
+                        })
+                        ->whereColumn('contact_information.actor_id', 'repository.id')
+                        ->where('contact_information_i18n.region', $params['region']);
+                });
+            }
+
+            // Locality filter
+            if (!empty($params['locality'])) {
+                $query->whereExists(function ($sub) use ($params) {
+                    $sub->select(DB::raw(1))
+                        ->from('contact_information')
+                        ->join('contact_information_i18n', function ($j) {
+                            $j->on('contact_information.id', '=', 'contact_information_i18n.id')
+                              ->where('contact_information_i18n.culture', '=', $this->culture);
+                        })
+                        ->whereColumn('contact_information.actor_id', 'repository.id')
+                        ->where('contact_information_i18n.city', 'ILIKE', '%' . $params['locality'] . '%');
+                });
+            }
+
+            // Archive type filter
+            if (!empty($params['archiveType'])) {
+                $query->whereExists(function ($sub) use ($params) {
+                    $sub->select(DB::raw(1))
+                        ->from('object_term_relation')
+                        ->whereColumn('object_term_relation.object_id', 'repository.id')
+                        ->where('object_term_relation.term_id', (int) $params['archiveType']);
+                });
+            }
+
+            // Geographic subregion filter
+            if (!empty($params['subregion'])) {
+                $query->whereExists(function ($sub) use ($params) {
+                    $sub->select(DB::raw(1))
+                        ->from('object_term_relation')
+                        ->whereColumn('object_term_relation.object_id', 'repository.id')
+                        ->where('object_term_relation.term_id', (int) $params['subregion']);
+                });
+            }
+
+            // Has digital object filter
+            if (!empty($params['hasDigitalObject'])) {
+                $query->whereExists(function ($sub) {
+                    $sub->select(DB::raw(1))
+                        ->from('digital_object')
+                        ->whereColumn('digital_object.object_id', 'repository.id');
+                });
+            }
+
+            // Language filter
+            if (!empty($params['languages'])) {
+                $query->whereExists(function ($sub) use ($params) {
+                    $sub->select(DB::raw(1))
+                        ->from('repository_i18n')
+                        ->whereColumn('repository_i18n.id', 'repository.id')
+                        ->where('repository_i18n.culture', $params['languages']);
+                });
+            }
+
+            $total = $query->count();
+            $query = $this->applySort($query, $sort, $sortDir);
+            $rows  = $query->skip($skip)->take($limit)->get();
+
+            $hits = [];
+            foreach ($rows as $row) {
+                $hits[] = $this->transformRow($row);
+            }
+
+            return ['hits' => $hits, 'total' => $total, 'page' => $page, 'limit' => $limit];
+        } catch (\Exception $e) {
+            Log::error(static::class . ' browseAdvanced error: ' . $e->getMessage());
+            return ['hits' => [], 'total' => 0, 'page' => $page, 'limit' => $limit];
+        }
+    }
+
+    // =====================================================================
+    //  FACETS
+    // =====================================================================
+
+    /**
+     * Get thematic area facets for the browse sidebar.
+     *
+     * @return array<int, array{name: string, count: int}>
+     */
+    public function getThematicAreaFacets(): array
+    {
+        $rows = DB::table('repository')
+            ->join('object_term_relation', 'repository.id', '=', 'object_term_relation.object_id')
+            ->join('term', 'object_term_relation.term_id', '=', 'term.id')
+            ->join('term_i18n', function ($j) {
+                $j->on('term.id', '=', 'term_i18n.id')
+                  ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('term.taxonomy_id', 72) // Thematic area taxonomy
+            ->where('repository.id', '!=', 6)
+            ->select('term.id', 'term_i18n.name', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('term.id', 'term_i18n.name')
+            ->orderBy('term_i18n.name')
+            ->get();
+
+        $facets = [];
+        foreach ($rows as $row) {
+            $facets[$row->id] = ['name' => $row->name, 'count' => $row->cnt];
+        }
+        return $facets;
+    }
+
+    /**
+     * Get region facets for the browse sidebar.
+     *
+     * @return array<int, object>
+     */
+    public function getRegionFacets(): array
+    {
+        $rows = DB::table('repository')
+            ->join('contact_information', 'repository.id', '=', 'contact_information.actor_id')
+            ->join('contact_information_i18n', function ($j) {
+                $j->on('contact_information.id', '=', 'contact_information_i18n.id')
+                  ->where('contact_information_i18n.culture', '=', $this->culture);
+            })
+            ->where('repository.id', '!=', 6)
+            ->whereNotNull('contact_information_i18n.region')
+            ->where('contact_information_i18n.region', '!=', '')
+            ->select('contact_information_i18n.region', DB::raw('COUNT(DISTINCT repository.id) as cnt'))
+            ->groupBy('contact_information_i18n.region')
+            ->orderBy('contact_information_i18n.region')
+            ->get();
+
+        return $rows->toArray();
+    }
+
+    /**
+     * Get archive type facets.
+     *
+     * @return array<int, array{name: string, count: int}>
+     */
+    public function getArchiveTypeFacets(): array
+    {
+        $rows = DB::table('repository')
+            ->join('object_term_relation', 'repository.id', '=', 'object_term_relation.object_id')
+            ->join('term', 'object_term_relation.term_id', '=', 'term.id')
+            ->join('term_i18n', function ($j) {
+                $j->on('term.id', '=', 'term_i18n.id')
+                  ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('term.taxonomy_id', 38) // Repository type taxonomy
+            ->where('repository.id', '!=', 6)
+            ->select('term.id', 'term_i18n.name', DB::raw('COUNT(DISTINCT repository.id) as cnt'))
+            ->groupBy('term.id', 'term_i18n.name')
+            ->orderBy('term_i18n.name')
+            ->get();
+
+        $facets = [];
+        foreach ($rows as $r) {
+            if ($r->name) {
+                $facets[$r->id] = ['name' => $r->name, 'count' => $r->cnt];
+            }
+        }
+        return $facets;
+    }
+
+    /**
+     * Get geographic subregion facets.
+     *
+     * @return array<int, array{name: string, count: int}>
+     */
+    public function getSubregionFacets(): array
+    {
+        $rows = DB::table('repository')
+            ->join('object_term_relation', 'repository.id', '=', 'object_term_relation.object_id')
+            ->join('term', 'object_term_relation.term_id', '=', 'term.id')
+            ->join('term_i18n', function ($j) {
+                $j->on('term.id', '=', 'term_i18n.id')
+                  ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('term.taxonomy_id', 73) // Geographic subregion taxonomy
+            ->where('repository.id', '!=', 6)
+            ->select('term.id', 'term_i18n.name', DB::raw('COUNT(DISTINCT repository.id) as cnt'))
+            ->groupBy('term.id', 'term_i18n.name')
+            ->orderBy('term_i18n.name')
+            ->get();
+
+        $facets = [];
+        foreach ($rows as $r) {
+            if ($r->name) {
+                $facets[$r->id] = ['name' => $r->name, 'count' => $r->cnt];
+            }
+        }
+        return $facets;
+    }
+
+    /**
+     * Get language facets for the browse sidebar.
+     *
+     * @return array<string, array{name: string, count: int}>
+     */
+    public function getLanguageFacets(): array
+    {
+        $rows = DB::table('repository')
+            ->join('repository_i18n', function ($j) {
+                $j->on('repository.id', '=', 'repository_i18n.id');
+            })
+            ->where('repository.id', '!=', 6)
+            ->whereNotNull('repository_i18n.culture')
+            ->where('repository_i18n.culture', '!=', '')
+            ->select('repository_i18n.culture', DB::raw('COUNT(DISTINCT repository.id) as cnt'))
+            ->groupBy('repository_i18n.culture')
+            ->orderBy('repository_i18n.culture')
+            ->get();
+
+        $facets = [];
+        foreach ($rows as $r) {
+            $langName = locale_get_display_language($r->culture, 'en') ?: $r->culture;
+            $facets[$r->culture] = ['name' => ucfirst($langName), 'count' => $r->cnt];
+        }
+        return $facets;
+    }
+
+    /**
+     * Get locality facets for the browse sidebar.
+     *
+     * @return array<string, array{name: string, count: int}>
+     */
+    public function getLocalityFacets(): array
+    {
+        $rows = DB::table('repository')
+            ->join('contact_information', 'repository.id', '=', 'contact_information.actor_id')
+            ->join('contact_information_i18n', function ($j) {
+                $j->on('contact_information.id', '=', 'contact_information_i18n.id')
+                  ->where('contact_information_i18n.culture', '=', $this->culture);
+            })
+            ->where('repository.id', '!=', 6)
+            ->whereNotNull('contact_information_i18n.city')
+            ->where('contact_information_i18n.city', '!=', '')
+            ->select('contact_information_i18n.city as locality', DB::raw('COUNT(DISTINCT repository.id) as cnt'))
+            ->groupBy('contact_information_i18n.city')
+            ->orderBy('contact_information_i18n.city')
+            ->get();
+
+        $facets = [];
+        foreach ($rows as $r) {
+            $facets[$r->locality] = ['name' => $r->locality, 'count' => $r->cnt];
+        }
+        return $facets;
+    }
+
+    // =====================================================================
+    //  PRIVATE HELPERS
+    // =====================================================================
+
+    /**
+     * Columns selected for browse queries.
+     */
+    protected function getBaseSelect(): array
+    {
+        return [
+            'repository.id',
+            'actor_i18n.authorized_form_of_name as name',
+            'actor.description_identifier as identifier',
+            'object.updated_at',
+            'slug.slug',
+            'ci18n.region',
+            'ci18n.city as locality',
+        ];
+    }
+
+    /**
+     * Apply the standard set of joins for browse queries.
+     *
+     * @param  \Illuminate\Database\Query\Builder $query
+     * @return \Illuminate\Database\Query\Builder
+     */
+    protected function applyBaseJoins($query)
+    {
+        return $query
+            ->join('actor_i18n', 'repository.id', '=', 'actor_i18n.id')
+            ->leftJoin('actor', 'repository.id', '=', 'actor.id')
+            ->join('object', 'repository.id', '=', 'object.id')
+            ->join('slug', 'repository.id', '=', 'slug.object_id')
+            ->leftJoin('contact_information as ci', 'repository.id', '=', 'ci.actor_id')
+            ->leftJoin('contact_information_i18n as ci18n', function ($j) {
+                $j->on('ci.id', '=', 'ci18n.id')
+                  ->where('ci18n.culture', '=', $this->culture);
+            })
+            ->where('actor_i18n.culture', $this->culture)
+            ->where('repository.id', '!=', 6); // Exclude root repository
+    }
+
+    /**
+     * Apply sort order to the browse query.
+     *
+     * @param  \Illuminate\Database\Query\Builder $query
+     * @return \Illuminate\Database\Query\Builder
+     */
+    protected function applySort($query, string $sort, string $sortDir)
+    {
+        switch ($sort) {
+            case 'alphabetic':
+                $query->orderBy('actor_i18n.authorized_form_of_name', $sortDir);
+                break;
+            case 'identifier':
+                $query->orderBy('actor.description_identifier', $sortDir);
+                $query->orderBy('actor_i18n.authorized_form_of_name', $sortDir);
+                break;
+            case 'region':
+                $query->orderBy('ci18n.region', $sortDir);
+                $query->orderBy('actor_i18n.authorized_form_of_name', 'asc');
+                break;
+            case 'locality':
+                $query->orderBy('ci18n.city', $sortDir);
+                $query->orderBy('actor_i18n.authorized_form_of_name', 'asc');
+                break;
+            case 'lastUpdated':
+            default:
+                $query->orderBy('object.updated_at', $sortDir);
+                break;
+        }
+
+        return $query;
+    }
+
+    /**
+     * Apply free-text search to the browse query.
+     *
+     * @param  \Illuminate\Database\Query\Builder $query
+     * @return \Illuminate\Database\Query\Builder
+     */
+    protected function applySearch($query, string $subquery)
+    {
+        if ($subquery !== '') {
+            $query->where(function ($q) use ($subquery) {
+                $q->where('actor_i18n.authorized_form_of_name', 'ILIKE', "%{$subquery}%")
+                  ->orWhere('actor.description_identifier', 'ILIKE', "%{$subquery}%");
+            });
+        }
+
+        return $query;
+    }
+
+    /**
+     * Transform a raw browse row into a normalised array, resolving thematic area and logo.
+     */
+    protected function transformRow($row): array
+    {
+        // Resolve thematic area name
+        $thematicArea = '';
+        if ($row->id) {
+            $ta = DB::table('object_term_relation')
+                ->join('term', 'object_term_relation.term_id', '=', 'term.id')
+                ->join('term_i18n', function ($j) {
+                    $j->on('term.id', '=', 'term_i18n.id')
+                      ->where('term_i18n.culture', '=', $this->culture);
+                })
+                ->where('object_term_relation.object_id', $row->id)
+                ->where('term.taxonomy_id', 72)
+                ->value('term_i18n.name');
+            $thematicArea = $ta ?: '';
+        }
+
+        // Check for logo
+        $logoPath = '/uploads/r/' . ($row->slug ?? '') . '/conf/logo.png';
+        $hasLogo  = $row->slug && file_exists(public_path('uploads/r/' . $row->slug . '/conf/logo.png'));
+
+        return [
+            'id'             => $row->id,
+            'name'           => $row->name ?? '',
+            'identifier'     => $row->identifier ?? '',
+            'updated_at'     => $row->updated_at ?? '',
+            'slug'           => $row->slug ?? '',
+            'region'         => $row->region ?? '',
+            'locality'       => $row->locality ?? '',
+            'thematic_area'  => $thematicArea,
+            'logo'           => $hasLogo ? $logoPath : null,
+        ];
+    }
+}
