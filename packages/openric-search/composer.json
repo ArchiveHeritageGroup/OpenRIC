@@ -1,0 +1,25 @@
+{
+    "name": "openric/search",
+    "description": "Elasticsearch + Qdrant + SPARQL search for OpenRiC",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev",
+        "openric/triplestore": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Search\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Search\\Providers\\SearchServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -1,4 +1,3 @@
-
 # OpenRiC
 
 **The world's first open-source, RiC-O native archival platform with full CRUD.**
@@ -38,7 +37,6 @@ Most archival systems store data in hierarchical relational schemas and optional
 ---
 
 ## Architecture
-
 ```
 ┌─────────────────────────────────────────────────────┐
 │  Laravel 12 (PHP 8.3) — Application Layer           │
@@ -57,42 +55,59 @@ Most archival systems store data in hierarchical relational schemas and optional
 
 ## Key Features
 
-- **Native RiC-O CRUD** — create and edit RiC-O entities (RecordResource, Agent, Activity, Place, Date, Mandate, Function) directly
-- **Traditional view** — ISAD(G) and ISAAR-CPF rendered from SPARQL — familiar to any archivist
-- **Graph view** — D3.js force-directed visualisation of RiC-O relationships
-- **RDF-Star audit trail** — provenance annotations on every triple
+- **Native RiC-O CRUD** — create and edit RiC-O entities directly (10 entity types, 8 relationship types)
+- **View switch** — toggle between RiC-native view and traditional ISAD(G)/ISAAR-CPF lenses per record
+- **Traditional input** — ISAD(G) and ISAAR-CPF forms that write RiC-O triples transparently
+- **RDF-Star provenance** — every triple change is annotated with who, when, and why
+- **Security clearance** — multi-level classification (Unclassified to Top Secret) with compartments
+- **AI-assisted description** — Ollama embeddings, semantic similarity, AI suggestions
+- **Condition assessment** — Spectrum 5.0 condition tracking linked to instantiations
+- **Authority linking** — Wikidata, VIAF, LCNAF integration via owl:sameAs
+- **Semantic search** — Qdrant vector search + Elasticsearch full-text
+- **Workflow engine** — multi-step approval workflows with pool-based assignment
+- **Audit trail** — comprehensive change logging with old/new value tracking
 - **Multi-standard export** — EAD3, EAC-CPF, JSON-LD, Turtle, RDF/XML
-- **Semantic search** — Qdrant vector search across descriptions
-- **Full-text search** — OpenSearch
 - **SPARQL endpoint** — queryable by external systems
 - **OAI-PMH** — harvestable by aggregators
 - **WCAG 2.1 Level AA** — accessible by design
-- **Multi-language** — internationalised interface
-- **Workflow** — multi-step approval for description publication
-- **Audit trail** — every change logged with RDF-Star + relational audit
+- **Plugin architecture** — standalone core with optional plugin packages
 
 ---
 
 ## Relationship to Heratio
 
-OpenRiC shares architectural components with [Heratio](https://theahg.co.za), the full GLAM + Records Management platform by The Archive and Heritage Group. OpenRiC is a **standalone platform** — it does not require Heratio and has no dependency on AtoM.
+OpenRiC is a **standalone platform** that shares architectural DNA with [Heratio](https://theahg.co.za), The Archive and Heritage Group's full GLAM + Records Management platform. All Heratio functionality (audit, security, workflow, search, AI, condition assessment) has been adapted into OpenRiC as independent plugin packages under the `OpenRiC\` namespace.
 
-Shared components: Laravel package architecture, Bootstrap 5 theme, ACL layer, workflow engine, audit trail, Fuseki integration, Qdrant semantic search.
+OpenRiC does **not** require Heratio and has no dependency on AtoM or MySQL. With all plugins disabled, OpenRiC still functions as a complete RiC-O archival platform.
+
+---
+
+## Package Architecture
+
+| Package | Purpose |
+|---|---|
+| `openric-core` | Settings, shared traits, base services |
+| `openric-triplestore` | TriplestoreService interface + Fuseki implementation |
+| `openric-theme` | Bootstrap 5 layouts, WCAG AA, view switch |
+| `openric-auth` | Authentication, ACL, roles, security clearance |
+| `openric-audit` | Audit trail and change logging |
+| `openric-provenance` | RDF-Star provenance, Activity model |
+| `openric-search` | Elasticsearch + Qdrant + SPARQL search |
+| `openric-ai` | Ollama embeddings, AI-assisted description |
+| `openric-authority` | Wikidata/VIAF/LCNAF linking |
+| `openric-condition` | Spectrum condition assessments |
+| `openric-workflow` | Multi-step approval workflows |
+| `openric-record-manage` | Record, RecordSet, RecordPart CRUD |
+| `openric-agent-manage` | Person, CorporateBody, Family CRUD |
+| `openric-place-manage` | Place CRUD |
+| `openric-activity-manage` | Activity, Date, Mandate, Function CRUD |
+| `openric-instantiation-manage` | Instantiation CRUD |
 
 ---
 
 ## Status
 
-🚧 **Active development — pre-release**
-
-OpenRiC is under active development. The first public release will target:
-
-- Full CRUD for core RiC-O entities
-- ISAD(G) and ISAAR-CPF traditional view lenses
-- Graph visualisation
-- EAD3 / JSON-LD export
-- SPARQL endpoint
-- OAI-PMH
+Active development — Phase 1 (Foundation) in progress
 
 ---
 
@@ -104,30 +119,27 @@ See [ROADMAP.md](ROADMAP.md) for the full build plan.
 
 ## Contributing
 
-OpenRiC welcomes contributions from the international archival community — archivists, developers, standards experts, and institutions.
-
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ---
 
 ## Community
 
-Discussions, questions, and implementation experience welcome on the [ICA Records in Contexts users Google Group](https://groups.google.com/g/Records_in_Contexts_users).
+Discussions welcome on the [ICA Records in Contexts users Google Group](https://groups.google.com/g/Records_in_Contexts_users).
 
 ---
 
 ## License
 
-[MIT License](LICENSE) — free to use, modify, and distribute.
+[AGPL-3.0](LICENSE)
 
 ---
 
 ## Developed By
 
 [The Archive and Heritage Group](https://theahg.co.za)  
-Johan Pieterse  
-[theahg.co.za](https://theahg.co.za)
+Johan Pieterse — [theahg.co.za](https://theahg.co.za)
 
 ---
 
-*OpenRiC is the first open-source platform to implement RiC-O as a native storage and CRUD layer with multi-standard lens support. No other open-source archival platform covers RiC-O, ISAD(G), ISAAR-CPF, and linked data delivery in a single stack.*
+*OpenRiC is the first open-source platform to implement RiC-O as a native storage and CRUD layer with multi-standard lens support.*
