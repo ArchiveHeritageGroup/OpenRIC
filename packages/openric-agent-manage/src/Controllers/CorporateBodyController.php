@@ -10,11 +10,13 @@ use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
 use OpenRiC\AgentManage\Contracts\CorporateBodyServiceInterface;
+use OpenRiC\Core\Contracts\StandardsMappingServiceInterface;
 
 class CorporateBodyController extends Controller
 {
     public function __construct(
         private readonly CorporateBodyServiceInterface $service,
+        private readonly StandardsMappingServiceInterface $mappingService,
     ) {}
 
     public function index(Request $request): View
@@ -34,16 +36,36 @@ class CorporateBodyController extends Controller
     public function show(string $iri): View
     {
         $entity = $this->service->find($iri);
-        if ($entity === null) { abort(404); }
+        if ($entity === null) {
+            abort(404);
+        }
+
+        $viewMode = session('openric_view_mode', config('openric.default_view', 'ric'));
+
+        if ($viewMode === 'traditional') {
+            $isaar = $this->mappingService->renderIsaarCpf($entity['properties'] ?? []);
+
+            return view('agent-manage::corporate-bodies.show-traditional', [
+                'entity' => $entity,
+                'isaar' => $isaar,
+                'viewMode' => $viewMode,
+            ]);
+        }
 
         return view('agent-manage::corporate-bodies.show', [
             'entity' => $entity,
-            'viewMode' => session('openric_view_mode', config('openric.default_view', 'ric')),
+            'viewMode' => $viewMode,
         ]);
     }
 
     public function create(): View
     {
+        $viewMode = session('openric_view_mode', config('openric.default_view', 'ric'));
+
+        if ($viewMode === 'traditional') {
+            return view('agent-manage::corporate-bodies.create-traditional');
+        }
+
         return view('agent-manage::corporate-bodies.create');
     }
 
@@ -51,6 +73,11 @@ class CorporateBodyController extends Controller
     {
         $data = $request->validate(['title' => 'required|string|max:1000', 'identifier' => 'nullable|string|max:255']);
         $user = Auth::user();
+
+        if ($request->input('_form_type') === 'isaar_cpf') {
+            $data = array_merge($data, ['_rico_properties' => $this->mappingService->isaarCpfToRico($request->all())]);
+        }
+
         $iri = $this->service->create($data, $user->getIri(), 'Created via OpenRiC UI');
 
         return redirect()->route('corporate-bodies.show', ['iri' => urlencode($iri)])->with('success', 'CorporateBody created.');
@@ -59,7 +86,9 @@ class CorporateBodyController extends Controller
     public function edit(string $iri): View
     {
         $entity = $this->service->find($iri);
-        if ($entity === null) { abort(404); }
+        if ($entity === null) {
+            abort(404);
+        }
 
         return view('agent-manage::corporate-bodies.edit', ['entity' => $entity]);
     }
@@ -68,6 +97,11 @@ class CorporateBodyController extends Controller
     {
         $data = $request->validate(['title' => 'required|string|max:1000', 'identifier' => 'nullable|string|max:255']);
         $user = Auth::user();
+
+        if ($request->input('_form_type') === 'isaar_cpf') {
+            $data = array_merge($data, ['_rico_properties' => $this->mappingService->isaarCpfToRico($request->all())]);
+        }
+
         $this->service->update($iri, $data, $user->getIri(), 'Updated via OpenRiC UI');
 
         return redirect()->route('corporate-bodies.show', ['iri' => urlencode($iri)])->with('success', 'CorporateBody updated.');

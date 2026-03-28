@@ -56,14 +56,16 @@ A standalone, RiC-O native archival platform with plugin architecture. Every arc
 - [ ] `openric-condition` — Spectrum condition assessments
 - [ ] `openric-workflow` — Multi-step approval workflows
 
-### Traditional Lenses (included in Phase 1)
-- [ ] ISAD(G) view lens — all 26 elements rendered from SPARQL
-- [ ] ISAD(G) input form — writes RiC-O triples
-- [ ] ISAAR-CPF view lens
-- [ ] ISAAR-CPF input form
-- [ ] Standards mapping table — ISAD(G) field → RiC-O property
-- [ ] Hierarchical browse (fonds/series/file/item) rendered from graph
-- [ ] Traditional finding aid print view
+### Traditional Lenses — COMPLETE (Phase 2, v0.2.0)
+- [x] ISAD(G) view lens — all 26 elements rendered from SPARQL (RecordSet, Record, RecordPart)
+- [x] ISAD(G) input form — writes RiC-O triples via StandardsMappingService
+- [x] ISAAR-CPF view lens (Person, CorporateBody, Family)
+- [x] ISAAR-CPF input form — writes RiC-O triples via StandardsMappingService
+- [x] Standards mapping admin UI — /admin/mappings showing all ISAD(G)→RiC-O and ISAAR-CPF→RiC-O tables
+- [x] Hierarchical browse — fonds/series/file/item tree with expand/collapse
+- [x] Traditional finding aid print view — recursive ISAD(G) rendering
+- [x] Relationship CRUD UI — add/remove relationships between entities
+- [x] View switch toggle — RiC / Traditional per session with middleware
 
 ---
 

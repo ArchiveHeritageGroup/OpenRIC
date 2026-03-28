@@ -6,7 +6,9 @@ namespace OpenRiC\Core\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use OpenRiC\Core\Contracts\SettingsServiceInterface;
+use OpenRiC\Core\Contracts\RelationshipServiceInterface;
 use OpenRiC\Core\Contracts\StandardsMappingServiceInterface;
+use OpenRiC\Core\Services\RelationshipService;
 use OpenRiC\Core\Services\SettingsService;
 use OpenRiC\Core\Services\StandardsMappingService;
 
@@ -27,6 +29,7 @@ class OpenRiCCoreServiceProvider extends ServiceProvider
 
         $this->app->singleton(SettingsServiceInterface::class, SettingsService::class);
         $this->app->singleton(StandardsMappingServiceInterface::class, StandardsMappingService::class);
+        $this->app->singleton(RelationshipServiceInterface::class, RelationshipService::class);
     }
 
     /**
@@ -39,6 +42,9 @@ class OpenRiCCoreServiceProvider extends ServiceProvider
                 $this->configPath() => config_path('openric-core.php'),
             ], 'openric-core-config');
         }
+
+        $this->loadRoutesFrom(__DIR__ . '/../../routes/web.php');
+        $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'openric-core');
 
         $this->loadSettingsIntoConfig();
     }
