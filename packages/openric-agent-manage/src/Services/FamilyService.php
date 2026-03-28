@@ -5,75 +5,37 @@ declare(strict_types=1);
 namespace OpenRiC\AgentManage\Services;
 
 use OpenRiC\AgentManage\Contracts\FamilyServiceInterface;
-use OpenRiC\Triplestore\Contracts\TriplestoreServiceInterface;
 
-class FamilyService implements FamilyServiceInterface
+/**
+ * Family service — extends AgentService with rico:Family type.
+ * Adapted from Heratio ActorService (1,531 lines) filtered to entity_type_id = Family.
+ */
+class FamilyService extends AgentService implements FamilyServiceInterface
 {
-    public function __construct(
-        private readonly TriplestoreServiceInterface $triplestore,
-    ) {}
+    private const RDF_TYPE = 'rico:Family';
 
     public function browse(array $filters = [], int $limit = 25, int $offset = 0): array
     {
-        $sparql = <<<'SPARQL'
-            SELECT ?iri ?title ?identifier WHERE {
-                ?iri a rico:Family .
-                OPTIONAL { ?iri rico:title ?title }
-                OPTIONAL { ?iri rico:hasAgentName ?nameNode . ?nameNode rico:textualValue ?title }
-                OPTIONAL { ?iri rico:identifier ?identifier }
-            }
-            ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
-            SPARQL;
-
-        $items = $this->triplestore->select($sparql, [
-            'limit' => (string) $limit,
-            'offset' => (string) $offset,
-        ]);
-
-        $countSparql = <<<'SPARQL'
-            SELECT (COUNT(?iri) AS ?count) WHERE { ?iri a rico:Family . }
-            SPARQL;
-
-        $countResult = $this->triplestore->select($countSparql);
-        $total = (int) ($countResult[0]['count']['value'] ?? 0);
-
-        return ['items' => $items, 'total' => $total];
+        return $this->browseByType(self::RDF_TYPE, $filters, $limit, $offset);
     }
 
     public function find(string $iri): ?array
     {
-        return $this->triplestore->getEntity($iri);
+        return $this->findAgent($iri);
     }
 
     public function create(array $data, string $userId, string $reason): string
     {
-        $properties = [];
-        if (! empty($data['title'])) {
-            $properties['rico:title'] = ['value' => $data['title'], 'datatype' => 'xsd:string'];
-        }
-        if (! empty($data['identifier'])) {
-            $properties['rico:identifier'] = ['value' => $data['identifier'], 'datatype' => 'xsd:string'];
-        }
-
-        return $this->triplestore->createEntity('rico:Family', $properties, $userId, $reason);
+        return $this->createAgent(self::RDF_TYPE, $data, $userId, $reason);
     }
 
     public function update(string $iri, array $data, string $userId, string $reason): bool
     {
-        $properties = [];
-        if (isset($data['title'])) {
-            $properties['rico:title'] = ['value' => $data['title'], 'datatype' => 'xsd:string'];
-        }
-        if (array_key_exists('identifier', $data)) {
-            $properties['rico:identifier'] = ['value' => $data['identifier'] ?? '', 'datatype' => 'xsd:string'];
-        }
-
-        return $this->triplestore->updateEntity($iri, $properties, $userId, $reason);
+        return $this->updateAgent($iri, $data, $userId, $reason);
     }
 
     public function delete(string $iri, string $userId, string $reason): bool
     {
-        return $this->triplestore->deleteEntity($iri, $userId, $reason);
+        return $this->deleteAgent($iri, $userId, $reason);
     }
 }
