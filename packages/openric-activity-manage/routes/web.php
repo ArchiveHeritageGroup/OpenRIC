@@ -7,6 +7,6 @@ use OpenRiC\ActivityManage\Controllers\ActivityController;
 use OpenRiC\ActivityManage\Controllers\MandateController;
 use OpenRiC\ActivityManage\Controllers\RiCFunctionController;
 
-Route::resource('activities', ActivityController::class)->parameters(['activities' => 'iri']);
-Route::resource('mandates', MandateController::class)->parameters(['mandates' => 'iri']);
-Route::resource('functions', RiCFunctionController::class)->parameters(['functions' => 'iri']);
+Route::resource('activities', ActivityController::class)->where(['iri' => '.*'])->parameters(['activities' => 'iri']);
+Route::resource('mandates', MandateController::class)->where(['iri' => '.*'])->parameters(['mandates' => 'iri']);
+Route::resource('functions', RiCFunctionController::class)->where(['iri' => '.*'])->parameters(['functions' => 'iri']);

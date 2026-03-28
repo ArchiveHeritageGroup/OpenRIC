@@ -7,6 +7,7 @@
     <div class="col-md-5">
         <div class="card shadow-sm mt-5">
             <div class="card-body p-4">
+                <div class="text-center mb-3"><img src="{{ asset('OpenRiC.png') }}" alt="OpenRiC" height="120"></div>
                 <h1 class="h3 text-center mb-4"><span class="text-info">Open</span>RiC</h1>
                 <h2 class="h5 text-center text-muted mb-4">Sign in to your account</h2>
 

@@ -21,7 +21,7 @@ class HomeController extends Controller
 
         try {
             $health = $this->triplestore->health();
-            $fusekiOnline = $health['online'] ?? false;
+            $fusekiOnline = $health['available'] ?? $health['online'] ?? false;
             $tripleCount = $fusekiOnline ? $this->triplestore->countTriples() : 0;
         } catch (\Exception) {
             // Fuseki may not be reachable — show page anyway

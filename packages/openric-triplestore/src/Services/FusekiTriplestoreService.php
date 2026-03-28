@@ -58,7 +58,7 @@ class FusekiTriplestoreService implements TriplestoreServiceInterface
 
         $clientConfig = [
             'timeout' => (int) config('fuseki.timeout', 15),
-            'connect_timeout' => (int) config('fuseki.connect_timeout', 3),
+            'connect_timeout' => (int) config('fuseki.connect_timeout', 10),
         ];
 
         if ($this->username && $this->password) {
@@ -293,8 +293,12 @@ class FusekiTriplestoreService implements TriplestoreServiceInterface
         ];
 
         foreach ($results as $row) {
-            $predicate = $row['predicate'] ?? '';
-            $object = $row['object'] ?? '';
+            $predicate = is_array($row['predicate'] ?? '') ? ($row['predicate']['value'] ?? '') : ($row['predicate'] ?? '');
+            $object = $row['object'] ?? ['value' => ''];
+
+            if ($predicate === '') {
+                continue;
+            }
 
             if (! isset($entity['properties'][$predicate])) {
                 $entity['properties'][$predicate] = [];
@@ -460,7 +464,9 @@ class FusekiTriplestoreService implements TriplestoreServiceInterface
             return 0;
         }
 
-        return (int) $results[0]['count'];
+        $countVal = $results[0]['count'];
+
+        return (int) (is_array($countVal) ? ($countVal['value'] ?? 0) : $countVal);
     }
 
     public function generateIri(string $type): string
@@ -498,26 +504,36 @@ class FusekiTriplestoreService implements TriplestoreServiceInterface
      */
     private function executeQuery(string $sparql): string
     {
-        try {
-            $response = $this->client->post($this->queryUrl, [
-                'headers' => [
-                    'Content-Type' => 'application/sparql-query',
-                    'Accept' => 'application/json',
-                ],
-                'body' => $sparql,
-            ]);
+        $lastException = null;
+        $maxRetries = 2;
 
-            $statusCode = $response->getStatusCode();
-            $body = (string) $response->getBody();
+        for ($attempt = 0; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $response = $this->client->post($this->queryUrl, [
+                    'headers' => [
+                        'Content-Type' => 'application/sparql-query',
+                        'Accept' => 'application/json',
+                    ],
+                    'body' => $sparql,
+                ]);
 
-            if ($statusCode < 200 || $statusCode >= 300) {
-                throw TriplestoreException::httpError($statusCode, $body, $sparql);
+                $statusCode = $response->getStatusCode();
+                $body = (string) $response->getBody();
+
+                if ($statusCode < 200 || $statusCode >= 300) {
+                    throw TriplestoreException::httpError($statusCode, $body, $sparql);
+                }
+
+                return $body;
+            } catch (GuzzleException $e) {
+                $lastException = $e;
+                if ($attempt < $maxRetries) {
+                    usleep(500000); // 500ms before retry
+                }
             }
-
-            return $body;
-        } catch (GuzzleException $e) {
-            throw TriplestoreException::connectionFailed($this->queryUrl, $e);
         }
+
+        throw TriplestoreException::connectionFailed($this->queryUrl, $lastException);
     }
 
     /**
@@ -627,6 +643,11 @@ class FusekiTriplestoreService implements TriplestoreServiceInterface
         }
 
         $stringValue = (string) $value;
+
+        // Numeric strings (for LIMIT, OFFSET) — pass as bare integers
+        if (ctype_digit($stringValue)) {
+            return $stringValue;
+        }
 
         // IRIs are wrapped in angle brackets
         if (str_starts_with($stringValue, 'http://') || str_starts_with($stringValue, 'https://')) {
@@ -816,9 +837,9 @@ class FusekiTriplestoreService implements TriplestoreServiceInterface
      *
      * @param  array<string, string> $valueObj  e.g. {'type': 'uri', 'value': '...'}
      */
-    private function extractBindingValue(array $valueObj): string
+    private function extractBindingValue(array $valueObj): array
     {
-        return $valueObj['value'] ?? '';
+        return $valueObj;
     }
 
     /**

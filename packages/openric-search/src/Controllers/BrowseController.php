@@ -17,7 +17,11 @@ class BrowseController extends Controller
 
     public function index(Request $request): View
     {
-        $result = $this->browseService->browse($request->all());
+        try {
+            $result = $this->browseService->browse($request->all());
+        } catch (\Exception) {
+            $result = ['items' => [], 'total' => 0, 'facets' => ['entity_types' => [], 'creators' => []], 'page' => 1, 'limit' => 25];
+        }
 
         return view('search::browse', [
             'items' => $result['items'],

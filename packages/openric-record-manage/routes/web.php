@@ -9,12 +9,12 @@ use OpenRiC\RecordManage\Controllers\RecordController;
 use OpenRiC\RecordManage\Controllers\RecordPartController;
 use OpenRiC\RecordManage\Controllers\RecordSetController;
 
-Route::resource('record-sets', RecordSetController::class)->parameters(['record-sets' => 'iri']);
-Route::resource('records', RecordController::class)->parameters(['records' => 'iri']);
-Route::resource('record-parts', RecordPartController::class)->parameters(['record-parts' => 'iri']);
+Route::resource('record-sets', RecordSetController::class)->parameters(['record-sets' => 'iri'])->where(['iri' => '.*']);
+Route::resource('records', RecordController::class)->parameters(['records' => 'iri'])->where(['iri' => '.*']);
+Route::resource('record-parts', RecordPartController::class)->parameters(['record-parts' => 'iri'])->where(['iri' => '.*']);
 
 Route::get('/hierarchy', [HierarchyController::class, 'index'])->name('hierarchy.index');
 Route::get('/hierarchy/children', [HierarchyController::class, 'children'])->name('hierarchy.children');
-Route::get('/hierarchy/{iri}', [HierarchyController::class, 'tree'])->name('hierarchy.tree');
+Route::get('/hierarchy/{iri}', [HierarchyController::class, 'tree'])->name('hierarchy.tree')->where('iri', '.*');
 
-Route::get('/finding-aid/{iri}/print', [FindingAidController::class, 'print'])->name('finding-aid.print');
+Route::get('/finding-aid/{iri}/print', [FindingAidController::class, 'print'])->name('finding-aid.print')->where('iri', '.*');
