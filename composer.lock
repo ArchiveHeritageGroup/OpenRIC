@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f3077027332d2f9f1426c885dbefef34",
+    "content-hash": "c7ce41737b907ee97e3ca0b92573faf6",
     "packages": [
         {
             "name": "brick/math",
@@ -2803,6 +2803,41 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "OpenRiC Core - foundational services, contracts, and traits for the OpenRiC archival platform",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/export",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-export",
+                "reference": "bdd100207f86f13872ef811dcdb645f1dacb1084"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "openric/triplestore": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Export\\Providers\\ExportServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Export\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Export and interoperability services for OpenRiC — JSON-LD, Turtle, RDF/XML, EAD3, EAC-CPF, Dublin Core, IIIF",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8856,7 +8891,8 @@
         "openric/condition": 20,
         "openric/workflow": 20,
         "openric/provenance": 20,
-        "openric/graph": 20
+        "openric/graph": 20,
+        "openric/export": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

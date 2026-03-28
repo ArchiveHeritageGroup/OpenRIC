@@ -35,7 +35,8 @@
         "openric/condition": "@dev",
         "openric/workflow": "@dev",
         "openric/provenance": "@dev",
-        "openric/graph": "@dev"
+        "openric/graph": "@dev",
+        "openric/export": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
