@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "c7ce41737b907ee97e3ca0b92573faf6",
+    "content-hash": "20bc85b82232214c3f6e63891982a476",
     "packages": [
         {
             "name": "brick/math",
@@ -2532,6 +2532,41 @@
             "time": "2026-02-16T23:10:27+00:00"
         },
         {
+            "name": "openric/accession",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-accession",
+                "reference": "c11b5b6240cafacc41e97a796b9ac51f6448200d"
+            },
+            "require": {
+                "openric/core": "*",
+                "openric/triplestore": "*",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Accession\\Providers\\AccessionServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Accession\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "OpenRiC Accession Management - accession records, items, donor links, and record IRI linking",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "openric/activity-manage",
             "version": "dev-main",
             "dist": {
@@ -2803,6 +2838,111 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "OpenRiC Core - foundational services, contracts, and traits for the OpenRiC archival platform",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/dedupe",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-dedupe",
+                "reference": "c8aa05c75083db37cba10a4788c8fa6c6a3cf70f"
+            },
+            "require": {
+                "openric/core": "*",
+                "openric/triplestore": "*",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Dedupe\\Providers\\DedupeServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Dedupe\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "OpenRiC Deduplication - SPARQL-based duplicate detection, comparison, and merging for records and agents",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/digital-object",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-digital-object",
+                "reference": "0273053b2901ce079e6ee6fd853d50e9ac23ccd9"
+            },
+            "require": {
+                "openric/core": "*",
+                "openric/triplestore": "*",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\DigitalObject\\Providers\\DigitalObjectServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\DigitalObject\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "OpenRiC Digital Object Management - rico:Instantiation CRUD, file upload, and linking to records",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/donor",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-donor",
+                "reference": "8de646afe869c7576c38e3bca90c4a96eff5ae09"
+            },
+            "require": {
+                "openric/core": "*",
+                "openric/triplestore": "*",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Donor\\Providers\\DonorServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Donor\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "OpenRiC Donor Management - donor records, contact info, accession linking",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8892,7 +9032,11 @@
         "openric/workflow": 20,
         "openric/provenance": 20,
         "openric/graph": 20,
-        "openric/export": 20
+        "openric/export": 20,
+        "openric/digital-object": 20,
+        "openric/accession": 20,
+        "openric/donor": 20,
+        "openric/dedupe": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

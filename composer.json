@@ -36,7 +36,11 @@
         "openric/workflow": "@dev",
         "openric/provenance": "@dev",
         "openric/graph": "@dev",
-        "openric/export": "@dev"
+        "openric/export": "@dev",
+        "openric/digital-object": "@dev",
+        "openric/accession": "@dev",
+        "openric/donor": "@dev",
+        "openric/dedupe": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

@@ -1,0 +1,23 @@
+{
+    "name": "openric/accession",
+    "description": "OpenRiC Accession Management - accession records, items, donor links, and record IRI linking",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "*",
+        "openric/triplestore": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Accession\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Accession\\Providers\\AccessionServiceProvider"
+            ]
+        }
+    }
+}
