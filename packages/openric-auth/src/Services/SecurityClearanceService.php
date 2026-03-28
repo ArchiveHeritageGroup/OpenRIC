@@ -41,9 +41,9 @@ class SecurityClearanceService implements SecurityClearanceServiceInterface
 
     // === User Clearance Management ===
 
-    public function getUserClearance(int $userId): ?SecurityClassification
+    public function getUserClearance(int $userId): ?object
     {
-        $row = DB::table('user_security_clearance as usc')
+        return DB::table('user_security_clearance as usc')
             ->join('security_classifications as sc', 'usc.classification_id', '=', 'sc.id')
             ->where('usc.user_id', $userId)
             ->where(function ($q) {
@@ -52,8 +52,6 @@ class SecurityClearanceService implements SecurityClearanceServiceInterface
             ->select('usc.*', 'sc.code', 'sc.name', 'sc.name as classification_name', 'sc.level', 'sc.color',
                 'sc.requires_2fa', 'sc.watermark_required', 'sc.download_allowed', 'sc.print_allowed', 'sc.copy_allowed')
             ->first();
-
-        return $row ? SecurityClassification::find($row->classification_id) : null;
     }
 
     public function getUserClearanceRecord(int $userId): ?object
@@ -150,14 +148,13 @@ class SecurityClearanceService implements SecurityClearanceServiceInterface
 
     // === Object Classification (IRI-based for RiC-O) ===
 
-    public function getObjectClassification(string $objectIri): ?SecurityClassification
+    public function getObjectClassification(string $objectIri): ?object
     {
-        $row = DB::table('object_security_classification as osc')
+        return DB::table('object_security_classification as osc')
             ->join('security_classifications as sc', 'osc.classification_id', '=', 'sc.id')
             ->where('osc.object_iri', $objectIri)->where('osc.active', true)
             ->select('osc.*', 'sc.code', 'sc.name', 'sc.level', 'sc.color', 'sc.requires_2fa', 'sc.watermark_required')
             ->first();
-        return $row ? SecurityClassification::find($row->classification_id) : null;
     }
 
     public function classifyObject(string $objectIri, int $classificationId, int $userId, ?string $reason = null, ?array $compartmentIds = null): bool
@@ -403,5 +400,197 @@ class SecurityClearanceService implements SecurityClearanceServiceInterface
         return DB::table('audit_log')->where('module', 'security')
             ->select('created_at', 'username', 'action', 'entity_id as object_iri', 'ip_address')
             ->orderByDesc('created_at')->limit($limit)->get();
+    }
+
+    // === Object Access Grants (from Heratio lines 497-541) ===
+
+    public function getUserAccessGrants(int $userId): array
+    {
+        return DB::table('object_access_grants as oag')
+            ->leftJoin('users as granter', 'oag.granted_by', '=', 'granter.id')
+            ->where('oag.user_id', $userId)
+            ->where('oag.is_active', true)
+            ->where(function ($q) {
+                $q->whereNull('oag.expires_at')->orWhere('oag.expires_at', '>', now());
+            })
+            ->select('oag.*', 'granter.username as granted_by_name')
+            ->orderByDesc('oag.granted_at')
+            ->get()
+            ->toArray();
+    }
+
+    public function revokeObjectAccess(int $grantId, int $revokedBy): bool
+    {
+        try {
+            DB::table('object_access_grants')
+                ->where('id', $grantId)
+                ->update(['is_active' => false, 'updated_at' => now()]);
+
+            $grant = DB::table('object_access_grants')->find($grantId);
+            if ($grant) {
+                $this->logSecurityAudit($revokedBy, $grant->object_iri, 'revoke_access', [
+                    'grant_id' => $grantId,
+                    'user_id' => $grant->user_id,
+                ]);
+            }
+            return true;
+        } catch (\Exception) {
+            return false;
+        }
+    }
+
+    /**
+     * Grant temporary object access to a user.
+     */
+    public function grantObjectAccess(int $userId, string $objectIri, string $accessType, int $grantedBy, ?int $requestId = null, ?string $expiresAt = null): int
+    {
+        $id = DB::table('object_access_grants')->insertGetId([
+            'user_id' => $userId,
+            'object_iri' => $objectIri,
+            'access_type' => $accessType,
+            'granted_by' => $grantedBy,
+            'request_id' => $requestId,
+            'granted_at' => now(),
+            'expires_at' => $expiresAt,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->logSecurityAudit($grantedBy, $objectIri, 'grant_access', [
+            'grant_id' => $id,
+            'user_id' => $userId,
+            'access_type' => $accessType,
+        ]);
+
+        return $id;
+    }
+
+    // === Declassification Scheduling (from Heratio lines 651-681) ===
+
+    public function getDueDeclassifications(int $limit = 10): array
+    {
+        return DB::table('object_declassification_schedule as ods')
+            ->leftJoin('security_classifications as sc_from', 'ods.current_classification_id', '=', 'sc_from.id')
+            ->leftJoin('security_classifications as sc_to', 'ods.target_classification_id', '=', 'sc_to.id')
+            ->leftJoin('users as scheduler', 'ods.scheduled_by', '=', 'scheduler.id')
+            ->where('ods.scheduled_date', '<=', now()->addDays(30))
+            ->where('ods.status', 'scheduled')
+            ->select(
+                'ods.*',
+                'sc_from.name as from_classification',
+                'sc_from.color as from_color',
+                'sc_to.name as to_classification',
+                'sc_to.color as to_color',
+                'scheduler.username as scheduled_by_name'
+            )
+            ->orderBy('ods.scheduled_date')
+            ->limit($limit)
+            ->get()
+            ->toArray();
+    }
+
+    /**
+     * Schedule declassification for an object.
+     */
+    public function scheduleDeclassification(string $objectIri, int $targetClassificationId, string $scheduledDate, int $scheduledBy, ?string $reason = null): int
+    {
+        $current = $this->getObjectClassification($objectIri);
+        $currentClassificationId = $current->classification_id ?? null;
+
+        $id = DB::table('object_declassification_schedule')->insertGetId([
+            'object_iri' => $objectIri,
+            'current_classification_id' => $currentClassificationId,
+            'target_classification_id' => $targetClassificationId,
+            'scheduled_date' => $scheduledDate,
+            'status' => 'scheduled',
+            'scheduled_by' => $scheduledBy,
+            'reason' => $reason,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->logSecurityAudit($scheduledBy, $objectIri, 'schedule_declassification', [
+            'schedule_id' => $id,
+            'target_classification_id' => $targetClassificationId,
+            'scheduled_date' => $scheduledDate,
+        ]);
+
+        return $id;
+    }
+
+    /**
+     * Execute scheduled declassifications that are due.
+     */
+    public function executeScheduledDeclassifications(): int
+    {
+        $due = DB::table('object_declassification_schedule')
+            ->where('scheduled_date', '<=', now())
+            ->where('status', 'scheduled')
+            ->get();
+
+        $count = 0;
+        foreach ($due as $schedule) {
+            $success = $this->declassifyObject(
+                $schedule->object_iri,
+                $schedule->scheduled_by,
+                $schedule->target_classification_id,
+                'Automatic declassification per schedule #' . $schedule->id
+            );
+
+            if ($success) {
+                DB::table('object_declassification_schedule')
+                    ->where('id', $schedule->id)
+                    ->update([
+                        'status' => 'executed',
+                        'executed_by' => $schedule->scheduled_by,
+                        'executed_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Check if user requires 2FA for their clearance level.
+     */
+    public function requires2fa(int $userId): bool
+    {
+        $clearance = $this->getUserClearance($userId);
+        return $clearance && $clearance->requires_2fa;
+    }
+
+    /**
+     * Check specific permission: can user download classified object?
+     */
+    public function canDownload(int $userId, string $objectIri): bool
+    {
+        $objClass = $this->getObjectClassification($objectIri);
+        if (!$objClass) return true;
+        if (!$this->canAccessObject($userId, $objectIri)) return false;
+        return (bool) $objClass->download_allowed;
+    }
+
+    /**
+     * Check specific permission: can user print classified object?
+     */
+    public function canPrint(int $userId, string $objectIri): bool
+    {
+        $objClass = $this->getObjectClassification($objectIri);
+        if (!$objClass) return true;
+        if (!$this->canAccessObject($userId, $objectIri)) return false;
+        return (bool) $objClass->print_allowed;
+    }
+
+    /**
+     * Check if watermark is required for this object.
+     */
+    public function requiresWatermark(string $objectIri): bool
+    {
+        $objClass = $this->getObjectClassification($objectIri);
+        return $objClass && $objClass->watermark_required;
     }
 }

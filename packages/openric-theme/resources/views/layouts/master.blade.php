@@ -132,6 +132,12 @@
     {{-- Header / Navigation --}}
     @include('theme::partials.header')
 
+    {{-- Admin notifications (pending requests, failed jobs) --}}
+    @include('theme::partials.admin-notifications')
+
+    {{-- Accessibility helpers (ARIA live region, keyboard nav, focus management) --}}
+    @include('theme::partials.accessibility-helpers')
+
     {{-- Flash message alerts --}}
     <div class="container-xl mt-3">
         @include('theme::partials.alerts')

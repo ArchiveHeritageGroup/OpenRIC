@@ -106,9 +106,11 @@ class AuditService implements AuditServiceInterface
 
         $items = $query->select([
             'id', 'uuid', 'user_id', 'username', 'user_email', 'ip_address', 'user_agent',
-            'session_id', 'action', 'entity_type', 'entity_id', 'entity_title', 'module',
-            'action_name', 'old_values', 'new_values', 'changed_fields',
-            'security_classification', 'description', 'created_at',
+            'session_id', 'action', 'entity_type', 'entity_id', 'entity_slug', 'entity_title',
+            'module', 'action_name', 'request_method', 'request_uri',
+            'old_values', 'new_values', 'changed_fields', 'metadata',
+            'security_classification', 'status', 'error_message', 'duration_ms',
+            'description', 'created_at',
         ])
             ->orderByDesc('created_at')
             ->offset($offset)
@@ -297,5 +299,154 @@ class AuditService implements AuditServiceInterface
                 ['value' => $value, 'updated_at' => now()]
             );
         }
+    }
+
+    /**
+     * Get authentication log entries — adapted from Heratio authentication action.
+     *
+     * @param string $type 'login' for successful logins, 'suspicious' for failures/lockouts
+     */
+    public function getAuthenticationLogs(string $type = 'login', int $limit = 50): array
+    {
+        $query = DB::table('audit_log')
+            ->where('module', 'auth');
+
+        if ($type === 'login') {
+            $query->where('action', 'login');
+        } elseif ($type === 'suspicious') {
+            $query->whereIn('action', ['failed_login', 'locked', 'access_denied', 'brute_force']);
+        }
+
+        return $query->orderByDesc('created_at')
+            ->limit($limit)
+            ->get()
+            ->toArray();
+    }
+
+    /**
+     * Log with full request context — enhanced version for middleware use.
+     */
+    public function logWithContext(string $action, array $data, ?float $durationMs = null): void
+    {
+        $user = Auth::user();
+        $request = request();
+
+        DB::table('audit_log')->insert(array_merge([
+            'uuid' => Str::uuid()->toString(),
+            'user_id' => $user?->id,
+            'username' => $user?->username,
+            'user_email' => $user?->email,
+            'ip_address' => $this->shouldAnonymizeIp() ? $this->anonymizeIp($request->ip()) : $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'session_id' => session()->getId(),
+            'action' => $action,
+            'request_method' => $request->method(),
+            'request_uri' => $request->getRequestUri(),
+            'status' => 'success',
+            'duration_ms' => $durationMs ? (int) $durationMs : null,
+            'created_at' => now(),
+        ], $data));
+    }
+
+    /**
+     * Log a failed/error action.
+     */
+    public function logError(string $action, string $errorMessage, array $data = []): void
+    {
+        $this->logWithContext($action, array_merge($data, [
+            'status' => 'error',
+            'error_message' => $errorMessage,
+        ]));
+    }
+
+    /**
+     * Log an access-denied event.
+     */
+    public function logAccessDenied(string $entityType, string $entityId, ?string $reason = null): void
+    {
+        $this->log('access_denied', [
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'module' => 'security',
+            'description' => $reason ?? 'Access denied due to insufficient clearance',
+            'status' => 'failure',
+        ]);
+    }
+
+    /**
+     * Log a download event.
+     */
+    public function logDownload(string $entityType, string $entityId, ?string $entityTitle = null, ?string $format = null): void
+    {
+        $this->log('download', [
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'entity_title' => $entityTitle,
+            'module' => 'export',
+            'metadata' => json_encode(['format' => $format]),
+        ]);
+    }
+
+    /**
+     * Get daily action counts for chart rendering.
+     */
+    public function getDailyActionCounts(int $days = 30): array
+    {
+        $fromDate = Carbon::now()->subDays($days)->startOfDay();
+
+        return DB::table('audit_log')
+            ->where('created_at', '>=', $fromDate)
+            ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as count'))
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->orderBy('date')
+            ->get()
+            ->toArray();
+    }
+
+    /**
+     * Get action breakdown by type for a specific period.
+     */
+    public function getActionBreakdown(int $days = 30): array
+    {
+        $fromDate = Carbon::now()->subDays($days)->startOfDay();
+
+        return DB::table('audit_log')
+            ->where('created_at', '>=', $fromDate)
+            ->select('action', DB::raw('COUNT(*) as count'))
+            ->groupBy('action')
+            ->orderByDesc('count')
+            ->get()
+            ->toArray();
+    }
+
+    /**
+     * Check if IP anonymization is enabled.
+     */
+    private function shouldAnonymizeIp(): bool
+    {
+        $setting = DB::table('settings')
+            ->where('group', 'audit')
+            ->where('key', 'audit_ip_anonymize')
+            ->value('value');
+
+        return $setting === '1';
+    }
+
+    /**
+     * Anonymize an IP address (GDPR compliance) — zeroes the last octet.
+     */
+    private function anonymizeIp(?string $ip): ?string
+    {
+        if ($ip === null) {
+            return null;
+        }
+
+        if (str_contains($ip, ':')) {
+            // IPv6: zero the last 80 bits
+            return preg_replace('/:[^:]+:[^:]+:[^:]+:[^:]+:[^:]+$/', ':0:0:0:0:0', $ip);
+        }
+
+        // IPv4: zero last octet
+        return preg_replace('/\.\d+$/', '.0', $ip);
     }
 }

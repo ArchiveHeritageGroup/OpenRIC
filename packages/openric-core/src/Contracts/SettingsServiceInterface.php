@@ -5,45 +5,82 @@ declare(strict_types=1);
 namespace OpenRiC\Core\Contracts;
 
 /**
- * Interface for application settings stored in the PostgreSQL 'settings' table.
+ * Application settings stored in PostgreSQL 'settings' table.
  *
- * Settings are organised by group and key, allowing logical grouping
- * (e.g. 'ui', 'search', 'triplestore') with individual keys within each group.
+ * Adapted from Heratio AhgSettingsService (508 lines).
+ * Settings are organised by group (general, fuseki, theme, security, etc.)
+ * with individual keys within each group. Values are type-cast based on
+ * the 'type' column (string, integer, boolean, json, text, email, url).
  */
 interface SettingsServiceInterface
 {
     /**
-     * Retrieve a single setting value.
-     *
-     * @param  string  $group    The settings group (e.g. 'ui', 'search').
-     * @param  string  $key      The setting key within the group.
-     * @param  mixed   $default  Value returned when the setting does not exist.
-     * @return mixed
+     * Retrieve a single setting value, type-cast according to the stored type.
      */
     public function get(string $group, string $key, mixed $default = null): mixed;
 
     /**
-     * Store or update a single setting value.
-     *
-     * @param  string  $group  The settings group.
-     * @param  string  $key    The setting key within the group.
-     * @param  mixed   $value  The value to persist (will be cast to string for storage).
+     * Retrieve a setting as a boolean.
      */
-    public function set(string $group, string $key, mixed $value): void;
+    public function getBool(string $group, string $key, bool $default = false): bool;
 
     /**
-     * Retrieve all settings within a group as a key => value associative array.
-     *
-     * @param  string  $group  The settings group.
-     * @return array<string, mixed>
+     * Retrieve a setting as an integer.
+     */
+    public function getInt(string $group, string $key, int $default = 0): int;
+
+    /**
+     * Retrieve a setting as a string.
+     */
+    public function getString(string $group, string $key, string $default = ''): string;
+
+    /**
+     * Check if a feature is enabled. Looks for '{feature}.enabled' or '{feature}_enabled' key.
+     */
+    public function isEnabled(string $group, string $feature): bool;
+
+    /**
+     * Store or update a single setting value.
+     */
+    public function set(string $group, string $key, mixed $value, ?string $type = null, ?string $description = null): void;
+
+    /**
+     * Retrieve all settings within a group as key => value array.
      */
     public function getGroup(string $group): array;
 
     /**
+     * Retrieve all settings within a group as key => full row (value, type, description, etc.).
+     */
+    public function getGroupFull(string $group): array;
+
+    /**
+     * Retrieve all setting groups and their keys.
+     */
+    public function getAll(): array;
+
+    /**
      * Delete a single setting.
-     *
-     * @param  string  $group  The settings group.
-     * @param  string  $key    The setting key to remove.
      */
     public function deleteKey(string $group, string $key): void;
+
+    /**
+     * Delete all settings in a group.
+     */
+    public function deleteGroup(string $group): void;
+
+    /**
+     * Check if a setting exists.
+     */
+    public function has(string $group, string $key): bool;
+
+    /**
+     * Bulk set multiple settings at once.
+     */
+    public function setMany(string $group, array $settings): void;
+
+    /**
+     * Clear all cached settings.
+     */
+    public function clearCache(): void;
 }
