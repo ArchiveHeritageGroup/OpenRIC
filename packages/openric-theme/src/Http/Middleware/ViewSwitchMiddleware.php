@@ -14,7 +14,7 @@ class ViewSwitchMiddleware
     {
         $viewParam = $request->query('view');
 
-        if ($viewParam !== null && in_array($viewParam, ['ric', 'traditional'], true)) {
+        if ($viewParam !== null && in_array($viewParam, ['ric', 'traditional', 'graph'], true)) {
             session(['openric_view_mode' => $viewParam]);
         }
 

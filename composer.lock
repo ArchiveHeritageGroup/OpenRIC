@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "de72e8f9f29b0d45826472994ef9ec36",
+    "content-hash": "f3077027332d2f9f1426c885dbefef34",
     "packages": [
         {
             "name": "brick/math",
@@ -2803,6 +2803,41 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "OpenRiC Core - foundational services, contracts, and traits for the OpenRiC archival platform",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/graph",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-graph",
+                "reference": "76f9e7e5fbdce2c7a5f52678e9719470951fbf44"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "openric/triplestore": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Graph\\Providers\\GraphServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Graph\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "D3.js/Cytoscape.js graph visualisation for OpenRiC",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -8820,7 +8855,8 @@
         "openric/authority": 20,
         "openric/condition": 20,
         "openric/workflow": 20,
-        "openric/provenance": 20
+        "openric/provenance": 20,
+        "openric/graph": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

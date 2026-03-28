@@ -69,13 +69,16 @@ A standalone, RiC-O native archival platform with plugin architecture. Every arc
 
 ---
 
-## Phase 3 — Graph View (v0.3)
+## Phase 3 — Graph View (v0.3) — COMPLETE
 
-- [ ] D3.js / Cytoscape.js relationship visualiser
-- [ ] Entity-centred graph view (expand/collapse relationships)
-- [ ] Timeline view (date-based traversal)
-- [ ] Agent network view (who created what)
-- [ ] Toggle between traditional view and graph view per record
+- [x] Cytoscape.js relationship visualiser (openric-graph package)
+- [x] Entity-centred graph view with force-directed layout, colour-coded by RiC-O type
+- [x] Graph overview — all RecordSets and relationships
+- [x] Timeline view — date-based traversal via rico:isAssociatedWithDate
+- [x] Agent network view — who created what via rico:hasOrHadCreator
+- [x] Three-way view toggle: RiC / Traditional / Graph
+- [x] JSON API endpoint for graph data (/graph/entity/{iri}/json)
+- [x] GraphService with entity graph, agent network, timeline, overview methods
 
 ---
 
