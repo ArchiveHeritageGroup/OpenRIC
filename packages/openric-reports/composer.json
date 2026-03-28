@@ -1,0 +1,25 @@
+{
+    "name": "openric/reports",
+    "description": "Reporting dashboard with SPARQL-based statistics and CSV export for OpenRiC",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev",
+        "openric/triplestore": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Reports\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Reports\\Providers\\ReportsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

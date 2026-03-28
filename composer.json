@@ -52,7 +52,16 @@
         "openric/ingest": "@dev",
         "openric/doi-manage": "@dev",
         "openric/integrity": "@dev",
-        "openric/help": "@dev"
+        "openric/help": "@dev",
+        "openric/data-migration": "@dev",
+        "openric/exhibition": "@dev",
+        "openric/gallery": "@dev",
+        "openric/heritage": "@dev",
+        "openric/reports": "@dev",
+        "openric/research": "@dev",
+        "openric/rights": "@dev",
+        "openric/settings-manage": "@dev",
+        "openric/user-manage": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

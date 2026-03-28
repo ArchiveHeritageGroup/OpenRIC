@@ -1,0 +1,25 @@
+{
+    "name": "openric/heritage",
+    "description": "Heritage object management with RiC-O triplestore integration for OpenRiC",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev",
+        "openric/triplestore": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Heritage\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Heritage\\Providers\\HeritageServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
