@@ -9,6 +9,9 @@ use Illuminate\Support\ServiceProvider;
 use OpenRiC\Backup\Contracts\BackupServiceInterface;
 use OpenRiC\Backup\Services\BackupService;
 
+/**
+ * Service provider -- adapted from Heratio AhgBackup\Providers\AhgBackupServiceProvider.
+ */
 class BackupServiceProvider extends ServiceProvider
 {
     public function register(): void
@@ -19,7 +22,6 @@ class BackupServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Route::middleware(['web', 'auth.required', 'admin'])
-            ->prefix('admin/backups')
             ->group(__DIR__ . '/../../routes/web.php');
 
         $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'openric-backup');

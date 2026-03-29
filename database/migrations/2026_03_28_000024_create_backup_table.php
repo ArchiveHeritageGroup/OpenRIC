@@ -13,7 +13,8 @@ return new class extends Migration
         Schema::create('backups', function (Blueprint $table): void {
             $table->id();
             $table->string('filename', 500);
-            $table->string('type', 50)->comment('full/database/triplestore');
+            $table->string('type', 50)->comment('full/database/triplestore/uploads/packages/framework');
+            $table->jsonb('components')->default('[]')->comment('Array of component names included');
             $table->bigInteger('size_bytes')->nullable();
             $table->string('status', 50)->default('pending');
             $table->text('error_message')->nullable();
