@@ -4,42 +4,96 @@ declare(strict_types=1);
 
 namespace OpenRiC\LandingPage\Contracts;
 
+use Illuminate\Support\Collection;
+
 /**
- * Landing page service interface -- adapted from Heratio AhgLandingPage\Services\LandingPageService (208 lines).
+ * Landing page service interface -- adapted from Heratio AhgLandingPage\Services\LandingPageService.
  *
- * Uses the settings table (group='landing_page') for content storage rather than dedicated tables,
- * keeping the schema lightweight while the Heratio pattern had full page/block tables.
+ * Full block-based page builder with CRUD for pages, blocks, block types, versioning,
+ * user dashboards, and nested column layouts. PostgreSQL storage.
  */
 interface LandingPageServiceInterface
 {
-    /**
-     * Get landing page content from settings.
-     *
-     * @return array<string, string>
-     */
-    public function getPageContent(): array;
+    // ── Page CRUD ────────────────────────────────────────────────────────
+
+    public function getAllPages(): Collection;
+
+    public function getPage(int $id): ?object;
+
+    public function getPageBySlug(?string $slug): ?object;
 
     /**
-     * Update landing page content in settings.
+     * @return array{success: bool, page_id?: int, error?: string}
      */
-    public function updatePageContent(array $data): void;
+    public function createPage(array $data, int $userId): array;
 
     /**
-     * Get ordered list of active widgets for the landing page.
-     *
-     * @return array<int, array{key: string, label: string, enabled: bool, position: int}>
+     * @return array{success: bool}
      */
-    public function getWidgets(): array;
+    public function updatePage(int $id, array $data, int $userId): array;
 
     /**
-     * Reorder widgets by providing an ordered array of widget keys.
+     * @return array{success: bool}
      */
-    public function reorderWidgets(array $orderedKeys): void;
+    public function deletePage(int $id, int $userId): array;
+
+    // ── Block CRUD ───────────────────────────────────────────────────────
+
+    public function getPageBlocks(int $pageId, bool $visibleOnly = true): Collection;
+
+    public function getBlockTypes(): Collection;
 
     /**
-     * Get statistics for the landing page: record counts by type, recent additions.
-     *
+     * @return array{success: bool, block_id?: int}
+     */
+    public function addBlock(int $pageId, int $blockTypeId, array $config, int $userId, array $options = []): array;
+
+    /**
+     * @return array{success: bool}
+     */
+    public function updateBlock(int $blockId, array $data, int $userId): array;
+
+    /**
+     * @return array{success: bool}
+     */
+    public function deleteBlock(int $blockId, int $userId): array;
+
+    /**
+     * @return array{success: bool}
+     */
+    public function reorderBlocks(int $pageId, array $order, int $userId): array;
+
+    /**
+     * @return array{success: bool, block_id?: int, error?: string}
+     */
+    public function duplicateBlock(int $blockId, int $userId): array;
+
+    /**
+     * @return array{success: bool, is_visible?: bool, error?: string}
+     */
+    public function toggleBlockVisibility(int $blockId, int $userId): array;
+
+    // ── Versioning ───────────────────────────────────────────────────────
+
+    public function getPageVersions(int $pageId): Collection;
+
+    /**
+     * @return array{success: bool, version_id?: int}
+     */
+    public function createVersion(int $pageId, string $status, int $userId): array;
+
+    // ── User Dashboards ──────────────────────────────────────────────────
+
+    public function getUserDashboards(int $userId): Collection;
+
+    // ── Statistics ────────────────────────────────────────────────────────
+
+    /**
      * @return array{counts: array<string, int>, recent: array}
      */
     public function getStats(): array;
+
+    // ── Child blocks for column layouts ──────────────────────────────────
+
+    public function getChildBlocks(int $parentBlockId, bool $visibleOnly = true): Collection;
 }
