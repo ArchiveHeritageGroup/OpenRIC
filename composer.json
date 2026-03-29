@@ -61,7 +61,14 @@
         "openric/research": "@dev",
         "openric/rights": "@dev",
         "openric/settings-manage": "@dev",
-        "openric/user-manage": "@dev"
+        "openric/user-manage": "@dev",
+        "openric/display": "@dev",
+        "openric/label": "@dev",
+        "openric/repository": "@dev",
+        "openric/spectrum": "@dev",
+        "openric/static-page": "@dev",
+        "openric/statistics": "@dev",
+        "openric/translation": "@dev"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",
