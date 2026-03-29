@@ -1,0 +1,33 @@
+@extends('theme::layouts.1col')
+@section('title', 'Preview Template')
+@section('body-class', 'admin reports')
+
+@section('content')
+<div class="row">
+  <div class="col-md-3">@include('reports::_menu')</div>
+  <div class="col-md-9">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h1><i class="fas fa-eye me-2"></i>Preview Template</h1>
+      <a href="{{ route('reports.builder.templates') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Back</a>
+    </div>
+
+    <div class="card">
+      <div class="card-header bg-primary text-white">Template Preview</div>
+      <div class="card-body">
+        @if(isset($report))
+          <h5>{{ $report->name ?? 'Template' }}</h5>
+          @if($report->description)<p class="text-muted">{{ $report->description }}</p>@endif
+          <table class="table table-sm">
+            <tr><th width="150">ID</th><td>{{ $report->id ?? '-' }}</td></tr>
+            <tr><th>Category</th><td>{{ $report->category ?? '-' }}</td></tr>
+            <tr><th>Data Source</th><td>{{ ucfirst($report->data_source ?? '-') }}</td></tr>
+            <tr><th>Updated</th><td>{{ $report->updated_at ?? '-' }}</td></tr>
+          </table>
+        @else
+          <p class="text-muted text-center py-4">Template not found.</p>
+        @endif
+      </div>
+    </div>
+  </div>
+</div>
+@endsection

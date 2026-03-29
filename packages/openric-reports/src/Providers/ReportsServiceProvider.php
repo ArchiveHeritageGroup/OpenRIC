@@ -9,6 +9,11 @@ use Illuminate\Support\ServiceProvider;
 use OpenRiC\Reports\Contracts\ReportServiceInterface;
 use OpenRiC\Reports\Services\ReportService;
 
+/**
+ * ReportsServiceProvider -- registers report service, routes, and views.
+ *
+ * Adapted from Heratio ahg-reports AhgReportsServiceProvider.
+ */
 class ReportsServiceProvider extends ServiceProvider
 {
     public function register(): void
