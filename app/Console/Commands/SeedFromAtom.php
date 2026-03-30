@@ -27,6 +27,8 @@ class SeedFromAtom extends Command
     private string $fusekiPass;
     private int $imported = 0;
     private int $agents = 0;
+    private int $places = 0;
+    private int $subjects = 0;
 
     private const LEVEL_TO_RIC = [
         'fonds' => 'RecordSet', 'subfonds' => 'RecordSet', 'collection' => 'RecordSet',
@@ -66,7 +68,10 @@ class SeedFromAtom extends Command
         // Count
         $totalRecords = DB::connection('atom')->table('information_object')->where('id', '>', 1)->count();
         $totalActors = DB::connection('atom')->table('actor')->where('id', '>', 1)->count();
-        $this->info("Found: {$totalRecords} records, {$totalActors} actors");
+        $totalPlaces = DB::connection('atom')->table('term')->where('taxonomy_id', 42)->count();
+        $totalSubjects = DB::connection('atom')->table('term')->where('taxonomy_id', 35)->count();
+        $totalGenres = DB::connection('atom')->table('term')->where('taxonomy_id', 78)->count();
+        $this->info("Found: {$totalRecords} records, {$totalActors} actors, {$totalPlaces} places, {$totalSubjects} subjects, {$totalGenres} genres");
 
         if ($dryRun) {
             $this->warn('Dry run — no data will be written to Fuseki');
@@ -84,8 +89,24 @@ class SeedFromAtom extends Command
         $this->info('Importing activities...');
         $this->importActivities($database, $dryRun);
 
+        // Extract and load places (taxonomy_id = 42)
+        $this->info('Importing places...');
+        $this->importPlaces($dryRun);
+
+        // Extract and load subjects (taxonomy_id = 35)
+        $this->info('Importing subjects...');
+        $this->importSubjects($dryRun);
+
+        // Extract and load genres (taxonomy_id = 78)
+        $this->info('Importing genres...');
+        $this->importGenres($dryRun);
+
+        // Link places, subjects, and genres to records via object_term_relation
+        $this->info('Linking access points to records...');
+        $this->importAccessPointLinks($dryRun);
+
         $this->newLine();
-        $this->info("Done. Imported {$this->imported} records, {$this->agents} agents.");
+        $this->info("Done. Imported {$this->imported} records, {$this->agents} agents, {$this->places} places, {$this->subjects} subjects/genres.");
 
         return Command::SUCCESS;
     }
@@ -297,12 +318,195 @@ class SeedFromAtom extends Command
         }
     }
 
+    /**
+     * Import places from AtoM taxonomy 42 (Places).
+     * Adapted from ric_extractor_v5.py place handling.
+     */
+    private function importPlaces(bool $dryRun): void
+    {
+        $rows = DB::connection('atom')
+            ->table('term as t')
+            ->join('term_i18n as ti', function ($j) {
+                $j->on('t.id', '=', 'ti.id')->where('ti.culture', '=', 'en');
+            })
+            ->where('t.taxonomy_id', 42)
+            ->whereNotNull('ti.name')
+            ->where('ti.name', '!=', '')
+            ->select('t.id', 'ti.name', 't.parent_id')
+            ->orderBy('t.lft')
+            ->get();
+
+        $triples = [];
+        $bar = $this->output->createProgressBar($rows->count());
+
+        foreach ($rows as $row) {
+            $iri = $this->baseUri . '/place/' . $row->id;
+
+            $triples[] = "<{$iri}> a rico:Place";
+            $triples[] = "<{$iri}> rico:title " . $this->literal($row->name);
+
+            // PlaceName entity — mirrors ric_extractor_v5.py pattern
+            $nameIri = $iri . '/name';
+            $triples[] = "<{$iri}> rico:hasOrHadName <{$nameIri}>";
+            $triples[] = "<{$nameIri}> a rico:PlaceName";
+            $triples[] = "<{$nameIri}> rico:textualValue " . $this->literal($row->name);
+
+            // Parent place hierarchy (parent_id 110 is the taxonomy root)
+            if ($row->parent_id && $row->parent_id != 110) {
+                $parentIri = $this->baseUri . '/place/' . $row->parent_id;
+                $triples[] = "<{$iri}> rico:hasOrHadLocation <{$parentIri}>";
+            }
+
+            $this->places++;
+            $bar->advance();
+        }
+
+        if (! $dryRun && count($triples) > 0) {
+            foreach (array_chunk($triples, 500) as $chunk) {
+                $this->executeSparqlUpdate($chunk);
+            }
+        }
+
+        $bar->finish();
+        $this->newLine();
+    }
+
+    /**
+     * Import subjects from AtoM taxonomy 35 (Subjects).
+     */
+    private function importSubjects(bool $dryRun): void
+    {
+        $this->importTermsAsConcepts(35, 'subject', $dryRun);
+    }
+
+    /**
+     * Import genres from AtoM taxonomy 78 (Genre).
+     */
+    private function importGenres(bool $dryRun): void
+    {
+        $this->importTermsAsConcepts(78, 'genre', $dryRun);
+    }
+
+    /**
+     * Import terms from a taxonomy as skos:Concept entities.
+     */
+    private function importTermsAsConcepts(int $taxonomyId, string $typeSlug, bool $dryRun): void
+    {
+        $rows = DB::connection('atom')
+            ->table('term as t')
+            ->join('term_i18n as ti', function ($j) {
+                $j->on('t.id', '=', 'ti.id')->where('ti.culture', '=', 'en');
+            })
+            ->where('t.taxonomy_id', $taxonomyId)
+            ->whereNotNull('ti.name')
+            ->where('ti.name', '!=', '')
+            ->select('t.id', 'ti.name', 't.parent_id')
+            ->orderBy('t.lft')
+            ->get();
+
+        $triples = [];
+        $bar = $this->output->createProgressBar($rows->count());
+
+        // Taxonomy root ID for hierarchy
+        $rootId = DB::connection('atom')
+            ->table('term')
+            ->where('taxonomy_id', $taxonomyId)
+            ->whereNull('parent_id')
+            ->orWhere(function ($q) use ($taxonomyId) {
+                $q->where('taxonomy_id', $taxonomyId)->where('parent_id', 110);
+            })
+            ->value('parent_id') ?? 110;
+
+        foreach ($rows as $row) {
+            $iri = $this->baseUri . '/' . $typeSlug . '/' . $row->id;
+
+            $triples[] = "<{$iri}> a skos:Concept";
+            $triples[] = "<{$iri}> rico:title " . $this->literal($row->name);
+            $triples[] = "<{$iri}> skos:prefLabel " . $this->literal($row->name);
+            $triples[] = "<{$iri}> openric:termType " . $this->literal($typeSlug);
+
+            if ($row->parent_id && $row->parent_id != $rootId && $row->parent_id != 110) {
+                $parentIri = $this->baseUri . '/' . $typeSlug . '/' . $row->parent_id;
+                $triples[] = "<{$iri}> skos:broader <{$parentIri}>";
+            }
+
+            $this->subjects++;
+            $bar->advance();
+        }
+
+        if (! $dryRun && count($triples) > 0) {
+            foreach (array_chunk($triples, 500) as $chunk) {
+                $this->executeSparqlUpdate($chunk);
+            }
+        }
+
+        $bar->finish();
+        $this->newLine();
+    }
+
+    /**
+     * Import access point links (object_term_relation) connecting records to places, subjects, genres.
+     */
+    private function importAccessPointLinks(bool $dryRun): void
+    {
+        // Map taxonomy_id to RiC-O predicate and type slug
+        $taxonomyMap = [
+            42 => ['predicate' => 'rico:hasOrHadPlaceOfOrigin', 'slug' => 'place'],
+            35 => ['predicate' => 'rico:hasOrHadSubject', 'slug' => 'subject'],
+            78 => ['predicate' => 'rico:hasOrHadContentOfType', 'slug' => 'genre'],
+        ];
+
+        $rows = DB::connection('atom')
+            ->table('object_term_relation as otr')
+            ->join('term as t', 'otr.term_id', '=', 't.id')
+            ->join('information_object as io', 'otr.object_id', '=', 'io.id')
+            ->leftJoin('term_i18n as ti', function ($j) {
+                $j->on('io.level_of_description_id', '=', 'ti.id')->where('ti.culture', '=', 'en');
+            })
+            ->whereIn('t.taxonomy_id', array_keys($taxonomyMap))
+            ->where('otr.object_id', '>', 1)
+            ->select('otr.object_id', 'otr.term_id', 't.taxonomy_id', 'ti.name as level_name')
+            ->get();
+
+        $triples = [];
+        $bar = $this->output->createProgressBar($rows->count());
+
+        foreach ($rows as $row) {
+            $config = $taxonomyMap[$row->taxonomy_id] ?? null;
+            if (! $config) {
+                $bar->advance();
+                continue;
+            }
+
+            // Determine record IRI type from level
+            $level = strtolower($row->level_name ?? 'item');
+            $ricType = self::LEVEL_TO_RIC[$level] ?? 'RecordSet';
+            $recordIri = $this->baseUri . '/' . strtolower($ricType) . '/' . $row->object_id;
+            $termIri = $this->baseUri . '/' . $config['slug'] . '/' . $row->term_id;
+
+            $triples[] = "<{$recordIri}> {$config['predicate']} <{$termIri}>";
+
+            $bar->advance();
+        }
+
+        if (! $dryRun && count($triples) > 0) {
+            $this->info("  Writing " . count($triples) . " access point link triples...");
+            foreach (array_chunk($triples, 500) as $chunk) {
+                $this->executeSparqlUpdate($chunk);
+            }
+        }
+
+        $bar->finish();
+        $this->newLine();
+    }
+
     private function executeSparqlUpdate(array $triples): void
     {
         $prefixes = "PREFIX rico: <https://www.ica.org/standards/RiC/ontology#>\n"
             . "PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>\n"
             . "PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>\n"
             . "PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>\n"
+            . "PREFIX skos: <http://www.w3.org/2004/02/skos/core#>\n"
             . "PREFIX openric: <https://ric.theahg.co.za/ontology#>\n";
 
         $sparql = $prefixes . "INSERT DATA {\n  " . implode(" .\n  ", $triples) . " .\n}";

@@ -1,0 +1,7 @@
+<?php
+
+use Illuminate\Support\Facades\Route;
+
+Route::prefix('admin/rad-manage')->middleware(['web', 'auth'])->group(function () {
+    Route::match(['get', 'post'], '/edit/{slug}', [\OpenRic\RadManage\Controllers\RadManageController::class, 'edit'])->name('openricradmanage.edit');
+});

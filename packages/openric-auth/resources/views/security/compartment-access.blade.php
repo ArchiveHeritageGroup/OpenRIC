@@ -1,0 +1,8 @@
+@extends('theme::layouts.1col')
+@section('title', 'Compartment Access')
+@section('content')
+<h1><i class="bi bi-people"></i> Compartment Access: {{ e($compartment->code ?? '') }}</h1>
+<div class="mb-3"><a href="{{ route('acl.compartments') }}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Compartments</a></div>
+<div class="card mb-4"><div class="card-header"><h5 class="mb-0">{{ e($compartment->name ?? '') }}</h5></div><div class="card-body">@if($compartment->description ?? null)<p>{{ e($compartment->description) }}</p>@endif<p><strong>Requires Briefing:</strong> {{ ($compartment->requires_briefing ?? false) ? 'Yes' : 'No' }}</p></div></div>
+<div class="card mb-4"><div class="card-header d-flex justify-content-between"><h5 class="mb-0">Users with Access</h5><span class="badge bg-primary">{{ count($users ?? []) }} users</span></div><div class="card-body">@if(empty($users))<p class="text-muted text-center">No users have access to this compartment.</p>@else<table class="table table-striped"><thead><tr><th>User</th><th>Granted</th><th>Expires</th><th>Actions</th></tr></thead><tbody>@foreach($users as $user)<tr><td>{{ e($user->username ?? '') }}</td><td>{{ $user->granted_date ?? '' }}</td><td>{{ $user->expiry_date ?? 'No expiry' }}</td><td><form action="{{ route('acl.set-clearance') }}" method="POST" style="display:inline;" onsubmit="return confirm('Revoke access?');">@csrf<input type="hidden" name="user_id" value="{{ $user->user_id }}"><input type="hidden" name="compartment_id" value="{{ $compartment->id }}"><button type="submit" class="btn btn-sm btn-outline-danger">Revoke</button></form></td></tr>@endforeach</tbody></table>@endif</div></div>
+@endsection

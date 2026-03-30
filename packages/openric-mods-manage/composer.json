@@ -1,0 +1,16 @@
+{
+    "name": "openric/mods-manage",
+    "description": "OpenRiC ModsManage package (migrated from ahgModsManagePlugin)",
+    "autoload": {
+        "psr-4": {
+            "OpenRicModsManage\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRicModsManage\\Providers\\OpenRicModsManageServiceProvider"
+            ]
+        }
+    }
+}

@@ -22,7 +22,7 @@ class RecordPartService implements RecordPartServiceInterface
                 OPTIONAL { ?iri rico:identifier ?identifier }
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, [

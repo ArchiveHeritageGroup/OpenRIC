@@ -52,7 +52,7 @@ class RiCFunctionService implements RiCFunctionServiceInterface
                 {$filterClauses}
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, $bindings);
@@ -151,7 +151,7 @@ class RiCFunctionService implements RiCFunctionServiceInterface
                 OPTIONAL { ?iri rico:endDate ?endDate }
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, [

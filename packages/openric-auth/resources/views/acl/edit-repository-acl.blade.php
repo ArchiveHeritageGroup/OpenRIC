@@ -1,0 +1,1 @@
+@include('openric-auth::acl._acl-repository', ['resource' => $resource ?? (object)[], 'basicActions' => $basicActions ?? [], 'repositories' => $repositories ?? [], 'repositoryObjects' => $repositoryObjects ?? [], 'rootRepository' => $rootRepository ?? (object)['id' => 0]])

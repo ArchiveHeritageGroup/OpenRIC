@@ -1,0 +1,534 @@
+#!/bin/bash
+#===============================================================================
+# OpenRiC Parity Check — Page-by-Page OpenRiC vs Heratio Comparison
+#===============================================================================
+# Compares HTTP responses and DOM structure between OpenRiC and Heratio for all
+# GET routes, generating both terminal output and an HTML report.
+#
+# Usage:
+#   ./bin/parity-check [OPTIONS]
+#
+# Options:
+#   --openric-url URL   OpenRiC base URL (default: http://localhost)
+#   --heratio-url URL   Heratio base URL (default: https://heratio.theahg.co.za)
+#   --output FILE       HTML report output path (default: /tmp/openric-parity-report.html)
+#   --routes-only       Just list routes without testing
+#   --filter PATTERN    Only test routes matching pattern (e.g. "actor")
+#   --timeout SECS      Curl timeout per request (default: 15)
+#   --cookie STRING     Cookie string for authenticated requests
+#   --verbose           Show detailed per-route output
+#   --help              Show this help
+#
+# Examples:
+#   ./bin/parity-check
+#   ./bin/parity-check --filter "accession" --verbose
+#   ./bin/parity-check --routes-only
+#   ./bin/parity-check --openric-url http://192.168.0.100 --heratio-url https://heratio.theahg.co.za
+#===============================================================================
+set -euo pipefail
+
+# ── Defaults ──────────────────────────────────────────────────────────────────
+OPENRIC_URL="http://localhost"
+HERATIO_URL="https://heratio.theahg.co.za"
+OUTPUT="/tmp/openric-parity-report.html"
+ROUTES_ONLY=0
+FILTER=""
+TIMEOUT=15
+COOKIE=""
+VERBOSE=0
+OPENRIC_ROOT="/usr/share/nginx/OpenRiC"
+
+# ── Colors ────────────────────────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+# ── Parse arguments ──────────────────────────────────────────────────────────
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --openric-url) OPENRIC_URL="$2"; shift 2 ;;
+        --heratio-url) HERATIO_URL="$2"; shift 2 ;;
+        --output)      OUTPUT="$2"; shift 2 ;;
+        --routes-only) ROUTES_ONLY=1; shift ;;
+        --filter)      FILTER="$2"; shift 2 ;;
+        --timeout)     TIMEOUT="$2"; shift 2 ;;
+        --cookie)      COOKIE="$2"; shift 2 ;;
+        --verbose)     VERBOSE=1; shift ;;
+        --help)
+            head -30 "$0" | tail -27
+            exit 0
+            ;;
+        *) echo -e "${RED}Unknown option: $1${NC}"; exit 1 ;;
+    esac
+done
+
+# ── Temp directory ───────────────────────────────────────────────────────────
+TMPDIR=$(mktemp -d /tmp/parity-check.XXXXXX)
+trap "rm -rf $TMPDIR" EXIT
+
+# ── Extract routes ───────────────────────────────────────────────────────────
+echo -e "${BOLD}${CYAN}=== OpenRiC Parity Check ===${NC}"
+echo -e "${DIM}OpenRiC: ${OPENRIC_URL}${NC}"
+echo -e "${DIM}Heratio: ${HERATIO_URL}${NC}"
+echo -e "${DIM}Output:  ${OUTPUT}${NC}"
+echo ""
+
+echo -e "${BLUE}Extracting OpenRiC GET routes...${NC}"
+
+php "$OPENRIC_ROOT/bin/lib/route-extract.php" --app "$OPENRIC_ROOT" 2>/dev/null | python3 -c "
+import sys, json
+routes = json.load(sys.stdin)
+seen = set()
+for r in routes:
+    method = r.get('method', '')
+    uri = r.get('uri', '')
+    name = r.get('name', '') or ''
+    action = r.get('action', '') or ''
+    if 'GET' in method and uri not in seen:
+        seen.add(uri)
+        print(f'{uri}\t{name}\t{action}')
+" | sort > "$TMPDIR/all_routes.tsv"
+
+TOTAL_ROUTES=$(wc -l < "$TMPDIR/all_routes.tsv")
+echo -e "${GREEN}Found ${TOTAL_ROUTES} GET routes${NC}"
+
+# Apply filter if set
+if [[ -n "$FILTER" ]]; then
+    grep -i "$FILTER" "$TMPDIR/all_routes.tsv" > "$TMPDIR/filtered_routes.tsv" || true
+    FILTERED=$(wc -l < "$TMPDIR/filtered_routes.tsv")
+    echo -e "${YELLOW}Filter '$FILTER' matched ${FILTERED} routes${NC}"
+    cp "$TMPDIR/filtered_routes.tsv" "$TMPDIR/test_routes.tsv"
+else
+    cp "$TMPDIR/all_routes.tsv" "$TMPDIR/test_routes.tsv"
+fi
+
+# ── Routes-only mode ────────────────────────────────────────────────────────
+if [[ $ROUTES_ONLY -eq 1 ]]; then
+    echo ""
+    echo -e "${BOLD}All GET routes:${NC}"
+    echo -e "${DIM}────────────────────────────────────────────────────────────────${NC}"
+    while IFS=$'\t' read -r uri name action; do
+        printf "  ${GREEN}%-50s${NC} ${DIM}%-30s${NC} %s\n" "/$uri" "$name" "$action"
+    done < "$TMPDIR/test_routes.tsv"
+    echo -e "${DIM}────────────────────────────────────────────────────────────────${NC}"
+    echo -e "${BOLD}Total: ${TOTAL_ROUTES} routes${NC}"
+    exit 0
+fi
+
+# ── Helper: build curl command ───────────────────────────────────────────────
+do_curl() {
+    local url="$1"
+    local output_file="$2"
+    local cookie_args=""
+    if [[ -n "$COOKIE" ]]; then
+        cookie_args="-b $COOKIE"
+    fi
+    curl -sS -o "$output_file" -w '%{http_code}\t%{time_total}\t%{size_download}' \
+        --max-time "$TIMEOUT" \
+        -L \
+        -H "User-Agent: OpenRiC-Parity-Check/1.0" \
+        $cookie_args \
+        "$url" 2>/dev/null || echo "000	0	0"
+}
+
+# ── Helper: extract DOM counts from HTML ─────────────────────────────────────
+extract_dom_stats() {
+    local html_file="$1"
+    local stats_file="$2"
+
+    python3 << 'PYEOF' "$html_file" "$stats_file"
+import sys, re
+from html.parser import HTMLParser
+
+html_file = sys.argv[1]
+stats_file = sys.argv[2]
+
+try:
+    with open(html_file, 'r', encoding='utf-8', errors='replace') as f:
+        html = f.read()
+except:
+    with open(stats_file, 'w') as f:
+        f.write("title=\ninputs=0\nselects=0\ntextareas=0\ntotal_fields=0\ntable_rows=0\nh1=0\nh2=0\nh3=0\nh4=0\nh5=0\nh6=0\ntotal_headings=0\nlinks=0\nbuttons=0\nforms=0\nimages=0\n")
+    sys.exit(0)
+
+class DOMCounter(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.counts = {
+            'input': 0, 'select': 0, 'textarea': 0,
+            'tr': 0, 'a': 0, 'button': 0, 'form': 0, 'img': 0,
+            'h1': 0, 'h2': 0, 'h3': 0, 'h4': 0, 'h5': 0, 'h6': 0,
+        }
+        self.in_title = False
+        self.title = ''
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in self.counts:
+            # Skip hidden inputs for field count
+            if tag == 'input':
+                attr_dict = dict(attrs)
+                if attr_dict.get('type', '').lower() == 'hidden':
+                    return
+            self.counts[tag] += 1
+        if tag == 'title':
+            self.in_title = True
+            self.title = ''
+
+    def handle_data(self, data):
+        if self.in_title:
+            self.title += data
+
+    def handle_endtag(self, tag):
+        if tag.lower() == 'title':
+            self.in_title = False
+
+counter = DOMCounter()
+try:
+    counter.feed(html)
+except:
+    pass
+
+c = counter.counts
+total_fields = c['input'] + c['select'] + c['textarea']
+total_headings = c['h1'] + c['h2'] + c['h3'] + c['h4'] + c['h5'] + c['h6']
+
+with open(stats_file, 'w') as f:
+    f.write(f"title={counter.title.strip()}\n")
+    f.write(f"inputs={c['input']}\n")
+    f.write(f"selects={c['select']}\n")
+    f.write(f"textareas={c['textarea']}\n")
+    f.write(f"total_fields={total_fields}\n")
+    f.write(f"table_rows={c['tr']}\n")
+    f.write(f"h1={c['h1']}\n")
+    f.write(f"h2={c['h2']}\n")
+    f.write(f"h3={c['h3']}\n")
+    f.write(f"h4={c['h4']}\n")
+    f.write(f"h5={c['h5']}\n")
+    f.write(f"h6={c['h6']}\n")
+    f.write(f"total_headings={total_headings}\n")
+    f.write(f"links={c['a']}\n")
+    f.write(f"buttons={c['button']}\n")
+    f.write(f"forms={c['form']}\n")
+    f.write(f"images={c['img']}\n")
+PYEOF
+}
+
+# ── Helper: read a stats value ───────────────────────────────────────────────
+get_stat() {
+    local file="$1"
+    local key="$2"
+    grep "^${key}=" "$file" 2>/dev/null | cut -d= -f2- || echo "0"
+}
+
+# ── Build URL for a route ───────────────────────────────────────────────────
+build_url() {
+    local base="$1"
+    local uri="$2"
+
+    # Skip routes with unresolvable parameters
+    if echo "$uri" | grep -q '{'; then
+        echo ""
+        return
+    fi
+
+    echo "${base}/${uri}"
+}
+
+# ── Main test loop ──────────────────────────────────────────────────────────
+echo ""
+echo -e "${BOLD}Testing routes...${NC}"
+echo -e "${DIM}────────────────────────────────────────────────────────────────${NC}"
+
+# Counters
+COUNT_TESTED=0
+COUNT_SKIPPED=0
+COUNT_BOTH_200=0
+COUNT_OPENRIC_500=0
+COUNT_OPENRIC_404=0
+COUNT_HERATIO_FAIL=0
+COUNT_FIELD_DIFF=0
+COUNT_MATCH=0
+
+# Result arrays stored as files
+mkdir -p "$TMPDIR/results"
+
+while IFS=$'\t' read -r uri name action; do
+    # Build URLs
+    openric_url=$(build_url "$OPENRIC_URL" "$uri")
+    heratio_url=$(build_url "$HERATIO_URL" "$uri")
+
+    # Skip parameterized routes
+    if [[ -z "$openric_url" ]]; then
+        COUNT_SKIPPED=$((COUNT_SKIPPED + 1))
+        if [[ $VERBOSE -eq 1 ]]; then
+            echo -e "  ${DIM}SKIP /$uri (parameterized)${NC}"
+        fi
+        echo "SKIP	$uri	$name	parameterized	0	0	0	0" >> "$TMPDIR/results/all.tsv"
+        continue
+    fi
+
+    COUNT_TESTED=$((COUNT_TESTED + 1))
+
+    # Fetch OpenRiC
+    openric_response=$(do_curl "$openric_url" "$TMPDIR/openric_body.html")
+    openric_code=$(echo "$openric_response" | cut -f1)
+    openric_time=$(echo "$openric_response" | cut -f2)
+    openric_size=$(echo "$openric_response" | cut -f3)
+
+    # Fetch Heratio
+    heratio_response=$(do_curl "$heratio_url" "$TMPDIR/heratio_body.html")
+    heratio_code=$(echo "$heratio_response" | cut -f1)
+    heratio_time=$(echo "$heratio_response" | cut -f2)
+    heratio_size=$(echo "$heratio_response" | cut -f3)
+
+    # Determine status
+    status="UNKNOWN"
+    detail=""
+
+    if [[ "$openric_code" == "500" && "$heratio_code" != "500" ]]; then
+        status="OPENRIC_500"
+        COUNT_OPENRIC_500=$((COUNT_OPENRIC_500 + 1))
+        echo -e "  ${RED}500  /${uri}${NC} ${DIM}(Heratio: ${heratio_code})${NC}"
+    elif [[ "$openric_code" == "404" && "$heratio_code" == "200" ]]; then
+        status="OPENRIC_404"
+        COUNT_OPENRIC_404=$((COUNT_OPENRIC_404 + 1))
+        echo -e "  ${YELLOW}404  /${uri}${NC} ${DIM}(Heratio: 200)${NC}"
+    elif [[ "$openric_code" == "200" && "$heratio_code" == "200" ]]; then
+        COUNT_BOTH_200=$((COUNT_BOTH_200 + 1))
+
+        # Extract DOM stats for both
+        extract_dom_stats "$TMPDIR/openric_body.html" "$TMPDIR/openric_stats.txt"
+        extract_dom_stats "$TMPDIR/heratio_body.html" "$TMPDIR/heratio_stats.txt"
+
+        o_fields=$(get_stat "$TMPDIR/openric_stats.txt" "total_fields")
+        h_fields=$(get_stat "$TMPDIR/heratio_stats.txt" "total_fields")
+        o_headings=$(get_stat "$TMPDIR/openric_stats.txt" "total_headings")
+        h_headings=$(get_stat "$TMPDIR/heratio_stats.txt" "total_headings")
+        o_rows=$(get_stat "$TMPDIR/openric_stats.txt" "table_rows")
+        h_rows=$(get_stat "$TMPDIR/heratio_stats.txt" "table_rows")
+        o_buttons=$(get_stat "$TMPDIR/openric_stats.txt" "buttons")
+        h_buttons=$(get_stat "$TMPDIR/heratio_stats.txt" "buttons")
+        o_links=$(get_stat "$TMPDIR/openric_stats.txt" "links")
+        h_links=$(get_stat "$TMPDIR/heratio_stats.txt" "links")
+        o_title=$(get_stat "$TMPDIR/openric_stats.txt" "title")
+        h_title=$(get_stat "$TMPDIR/heratio_stats.txt" "title")
+
+        field_diff=$((o_fields - h_fields))
+        heading_diff=$((o_headings - h_headings))
+        button_diff=$((o_buttons - h_buttons))
+        link_diff=$((o_links - h_links))
+
+        # Determine if there are significant differences
+        if [[ $field_diff -ne 0 || $heading_diff -ne 0 || $button_diff -ne 0 ]]; then
+            status="DIFF"
+            COUNT_FIELD_DIFF=$((COUNT_FIELD_DIFF + 1))
+            detail="fields:${h_fields}->${o_fields}(${field_diff}) headings:${h_headings}->${o_headings} buttons:${h_buttons}->${o_buttons}"
+            if [[ $VERBOSE -eq 1 ]]; then
+                echo -e "  ${YELLOW}DIFF /${uri}${NC} ${DIM}${detail}${NC}"
+            else
+                echo -e "  ${YELLOW}DIFF${NC} /${uri} ${DIM}[fields:${field_diff} headings:${heading_diff} buttons:${button_diff}]${NC}"
+            fi
+        else
+            status="MATCH"
+            COUNT_MATCH=$((COUNT_MATCH + 1))
+            if [[ $VERBOSE -eq 1 ]]; then
+                echo -e "  ${GREEN}OK   /${uri}${NC} ${DIM}(fields:${o_fields} headings:${o_headings} buttons:${o_buttons})${NC}"
+            fi
+        fi
+
+        # Save detailed stats
+        cp "$TMPDIR/openric_stats.txt" "$TMPDIR/results/openric_${COUNT_TESTED}.txt"
+        cp "$TMPDIR/heratio_stats.txt" "$TMPDIR/results/heratio_${COUNT_TESTED}.txt"
+
+    elif [[ "$heratio_code" == "000" || "$heratio_code" == "404" || "$heratio_code" == "302" ]]; then
+        status="HERATIO_FAIL"
+        COUNT_HERATIO_FAIL=$((COUNT_HERATIO_FAIL + 1))
+        if [[ $VERBOSE -eq 1 ]]; then
+            echo -e "  ${DIM}N/A  /${uri} (Heratio: ${heratio_code}, OpenRiC: ${openric_code})${NC}"
+        fi
+    else
+        status="OTHER"
+        if [[ $VERBOSE -eq 1 ]]; then
+            echo -e "  ${DIM}${openric_code}/${heratio_code} /${uri}${NC}"
+        fi
+    fi
+
+    # Record result
+    echo "${status}	${uri}	${name}	${openric_code}	${heratio_code}	${openric_time}	${heratio_time}	${openric_size}	${heratio_size}	${detail}" >> "$TMPDIR/results/all.tsv"
+
+done < "$TMPDIR/test_routes.tsv"
+
+# ── Summary ──────────────────────────────────────────────────────────────────
+echo ""
+echo -e "${DIM}────────────────────────────────────────────────────────────────${NC}"
+echo -e "${BOLD}${CYAN}Summary${NC}"
+echo -e "${DIM}────────────────────────────────────────────────────────────────${NC}"
+echo -e "  Total GET routes:       ${BOLD}${TOTAL_ROUTES}${NC}"
+echo -e "  Tested:                 ${BOLD}${COUNT_TESTED}${NC}"
+echo -e "  Skipped (parameterized):${BOLD}${COUNT_SKIPPED}${NC}"
+echo -e ""
+echo -e "  ${GREEN}Both 200 (matched):     ${COUNT_MATCH}${NC}"
+echo -e "  ${YELLOW}Both 200 (DOM diffs):   ${COUNT_FIELD_DIFF}${NC}"
+echo -e "  ${RED}OpenRiC 500:            ${COUNT_OPENRIC_500}${NC}"
+echo -e "  ${YELLOW}OpenRiC 404 (H 200):    ${COUNT_OPENRIC_404}${NC}"
+echo -e "  ${DIM}Heratio unavailable:    ${COUNT_HERATIO_FAIL}${NC}"
+
+# ── Generate HTML report ────────────────────────────────────────────────────
+echo ""
+echo -e "${BLUE}Generating HTML report: ${OUTPUT}${NC}"
+
+TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+cat > "$OUTPUT" << 'HTMLHEAD'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenRiC Parity Report</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8f9fa; color: #212529; padding: 2rem; }
+  h1 { color: #2c3e50; margin-bottom: 0.5rem; }
+  .meta { color: #6c757d; margin-bottom: 2rem; font-size: 0.9rem; }
+  .summary { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
+  .card { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 1.25rem; min-width: 160px; flex: 1; }
+  .card .number { font-size: 2rem; font-weight: 700; }
+  .card .label { color: #6c757d; font-size: 0.85rem; }
+  .card.green .number { color: #198754; }
+  .card.yellow .number { color: #ffc107; }
+  .card.red .number { color: #dc3545; }
+  .card.blue .number { color: #0d6efd; }
+  .card.gray .number { color: #6c757d; }
+  .section { margin-bottom: 2rem; }
+  .section h2 { color: #2c3e50; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid #dee2e6; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #dee2e6; border-radius: 8px; overflow: hidden; }
+  th { background: #2c3e50; color: #fff; text-align: left; padding: 0.75rem 1rem; font-size: 0.85rem; }
+  td { padding: 0.5rem 1rem; border-bottom: 1px solid #dee2e6; font-size: 0.85rem; }
+  tr:hover { background: #f1f3f5; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+  .badge-red { background: #f8d7da; color: #842029; }
+  .badge-yellow { background: #fff3cd; color: #664d03; }
+  .badge-green { background: #d1e7dd; color: #0f5132; }
+  .badge-gray { background: #e9ecef; color: #495057; }
+  .badge-blue { background: #cfe2ff; color: #084298; }
+  .diff-neg { color: #dc3545; font-weight: 600; }
+  .diff-pos { color: #ffc107; font-weight: 600; }
+  .diff-zero { color: #198754; }
+  .mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.8rem; }
+  .filter-bar { margin-bottom: 1rem; }
+  .filter-bar input { padding: 0.5rem 1rem; border: 1px solid #dee2e6; border-radius: 4px; width: 300px; }
+  @media (max-width: 768px) { .summary { flex-direction: column; } }
+</style>
+</head>
+<body>
+HTMLHEAD
+
+cat >> "$OUTPUT" << EOF
+<h1>OpenRiC Parity Report</h1>
+<p class="meta">Generated: ${TIMESTAMP} | OpenRiC: ${OPENRIC_URL} | Heratio: ${HERATIO_URL}</p>
+
+<div class="summary">
+  <div class="card blue"><div class="number">${COUNT_TESTED}</div><div class="label">Routes Tested</div></div>
+  <div class="card green"><div class="number">${COUNT_MATCH}</div><div class="label">Matched (200)</div></div>
+  <div class="card yellow"><div class="number">${COUNT_FIELD_DIFF}</div><div class="label">DOM Differences</div></div>
+  <div class="card red"><div class="number">${COUNT_OPENRIC_500}</div><div class="label">OpenRiC 500</div></div>
+  <div class="card yellow"><div class="number">${COUNT_OPENRIC_404}</div><div class="label">Missing (404)</div></div>
+  <div class="card gray"><div class="number">${COUNT_SKIPPED}</div><div class="label">Skipped</div></div>
+</div>
+EOF
+
+# Section: OpenRiC 500 errors
+if [[ $COUNT_OPENRIC_500 -gt 0 ]]; then
+    cat >> "$OUTPUT" << 'EOF'
+<div class="section">
+<h2>OpenRiC 500 Errors (Work in Heratio)</h2>
+<table>
+<thead><tr><th>Route</th><th>Name</th><th>OpenRiC</th><th>Heratio</th></tr></thead>
+<tbody>
+EOF
+    grep "^OPENRIC_500" "$TMPDIR/results/all.tsv" | while IFS=$'\t' read -r status uri rname ocode hcode otime htime osize hsize detail; do
+        echo "<tr><td class=\"mono\">/${uri}</td><td>${rname}</td><td><span class=\"badge badge-red\">${ocode}</span></td><td><span class=\"badge badge-green\">${hcode}</span></td></tr>" >> "$OUTPUT"
+    done
+    echo "</tbody></table></div>" >> "$OUTPUT"
+fi
+
+# Section: OpenRiC 404 (Heratio 200)
+if [[ $COUNT_OPENRIC_404 -gt 0 ]]; then
+    cat >> "$OUTPUT" << 'EOF'
+<div class="section">
+<h2>Missing in OpenRiC (404, Heratio returns 200)</h2>
+<table>
+<thead><tr><th>Route</th><th>Name</th><th>OpenRiC</th><th>Heratio</th></tr></thead>
+<tbody>
+EOF
+    grep "^OPENRIC_404" "$TMPDIR/results/all.tsv" | while IFS=$'\t' read -r status uri rname ocode hcode otime htime osize hsize detail; do
+        echo "<tr><td class=\"mono\">/${uri}</td><td>${rname}</td><td><span class=\"badge badge-yellow\">${ocode}</span></td><td><span class=\"badge badge-green\">${hcode}</span></td></tr>" >> "$OUTPUT"
+    done
+    echo "</tbody></table></div>" >> "$OUTPUT"
+fi
+
+# Section: DOM Differences
+if [[ $COUNT_FIELD_DIFF -gt 0 ]]; then
+    cat >> "$OUTPUT" << 'EOF'
+<div class="section">
+<h2>DOM Differences (Both 200, Element Count Mismatch)</h2>
+<table>
+<thead><tr><th>Route</th><th>Name</th><th>Detail</th></tr></thead>
+<tbody>
+EOF
+    grep "^DIFF" "$TMPDIR/results/all.tsv" | while IFS=$'\t' read -r status uri rname ocode hcode otime htime osize hsize detail; do
+        echo "<tr><td class=\"mono\">/${uri}</td><td>${rname}</td><td>${detail}</td></tr>" >> "$OUTPUT"
+    done
+    echo "</tbody></table></div>" >> "$OUTPUT"
+fi
+
+# Section: All results
+cat >> "$OUTPUT" << 'EOF'
+<div class="section">
+<h2>All Results</h2>
+<div class="filter-bar"><input type="text" id="filter" placeholder="Filter routes..." onkeyup="filterTable()"></div>
+<table id="allResults">
+<thead><tr><th>Route</th><th>Name</th><th>Status</th><th>OpenRiC</th><th>Heratio</th><th>O-Time</th><th>H-Time</th><th>Detail</th></tr></thead>
+<tbody>
+EOF
+
+while IFS=$'\t' read -r status uri rname ocode hcode otime htime osize hsize detail; do
+    case "$status" in
+        MATCH)       badge_class="badge-green"; badge_text="Match" ;;
+        DIFF)        badge_class="badge-yellow"; badge_text="Diff" ;;
+        OPENRIC_500) badge_class="badge-red"; badge_text="500" ;;
+        OPENRIC_404) badge_class="badge-yellow"; badge_text="404" ;;
+        HERATIO_FAIL) badge_class="badge-gray"; badge_text="H N/A" ;;
+        SKIP)        badge_class="badge-gray"; badge_text="Skipped" ;;
+        *)           badge_class="badge-gray"; badge_text="$status" ;;
+    esac
+    echo "<tr><td class=\"mono\">/${uri}</td><td>${rname}</td><td><span class=\"badge ${badge_class}\">${badge_text}</span></td><td>${ocode}</td><td>${hcode}</td><td>${otime}s</td><td>${htime}s</td><td>${detail}</td></tr>" >> "$OUTPUT"
+done < "$TMPDIR/results/all.tsv"
+
+cat >> "$OUTPUT" << 'EOF'
+</tbody></table></div>
+
+<script>
+function filterTable() {
+  var input = document.getElementById('filter').value.toLowerCase();
+  var rows = document.querySelectorAll('#allResults tbody tr');
+  rows.forEach(function(row) {
+    var text = row.textContent.toLowerCase();
+    row.style.display = text.includes(input) ? '' : 'none';
+  });
+}
+</script>
+</body>
+</html>
+EOF
+
+echo -e "${GREEN}HTML report written to: ${OUTPUT}${NC}"
+echo ""
+echo -e "${BOLD}Done.${NC}"

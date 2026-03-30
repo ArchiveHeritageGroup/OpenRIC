@@ -17,7 +17,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => env('DB_CONNECTION', 'pgsql'),
 
     /*
     |--------------------------------------------------------------------------
@@ -97,6 +97,24 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+        ],
+
+        // Heratio database connection (read-only)
+        'heratio' => [
+            'driver' => 'mysql',
+            'url' => env('HERATIO_DB_URL'),
+            'host' => env('HERATIO_DB_HOST', 'localhost'),
+            'port' => env('HERATIO_DB_PORT', '3306'),
+            'database' => env('HERATIO_DB_DATABASE', 'archive'),
+            'username' => env('HERATIO_DB_USERNAME', 'root'),
+            'password' => env('HERATIO_DB_PASSWORD', ''),
+            'unix_socket' => env('HERATIO_DB_SOCKET', '/var/run/mysqld/mysqld.sock'),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
         ],
 
         'sqlsrv' => [

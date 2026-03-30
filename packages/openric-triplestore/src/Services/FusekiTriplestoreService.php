@@ -300,10 +300,13 @@ class FusekiTriplestoreService implements TriplestoreServiceInterface
                 continue;
             }
 
-            if (! isset($entity['properties'][$predicate])) {
-                $entity['properties'][$predicate] = [];
+            // Store under prefixed name (e.g. rico:title) for view compatibility
+            $shortPredicate = $this->shortenUri($predicate);
+
+            if (! isset($entity['properties'][$shortPredicate])) {
+                $entity['properties'][$shortPredicate] = [];
             }
-            $entity['properties'][$predicate][] = $object;
+            $entity['properties'][$shortPredicate][] = $object;
         }
 
         return $entity;
@@ -801,6 +804,22 @@ class FusekiTriplestoreService implements TriplestoreServiceInterface
     // =========================================================================
     // Private: Escaping & Parsing
     // =========================================================================
+
+    /**
+     * Shorten a full URI to a prefixed name using the known prefix map.
+     * E.g. https://www.ica.org/standards/RiC/ontology#title → rico:title
+     * Returns the original URI if no matching prefix is found.
+     */
+    private function shortenUri(string $uri): string
+    {
+        foreach ($this->prefixes as $prefix => $namespace) {
+            if (str_starts_with($uri, $namespace)) {
+                return $prefix . ':' . substr($uri, strlen($namespace));
+            }
+        }
+
+        return $uri;
+    }
 
     /**
      * Escape a string literal for safe inclusion in SPARQL.

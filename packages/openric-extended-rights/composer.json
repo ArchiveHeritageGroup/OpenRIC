@@ -1,0 +1,24 @@
+{
+    "name": "openric/extended-rights",
+    "description": "Extended rights management for OpenRiC: embargoes, orphan works, TK labels, rights statements, CC licenses, reports",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\ExtendedRights\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\ExtendedRights\\Providers\\ExtendedRightsServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

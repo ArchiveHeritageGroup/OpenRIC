@@ -1,0 +1,1 @@
+@include('openric-auth::acl._term-acl-form', ['resource' => $resource ?? (object)[], 'termActions' => $termActions ?? $basicActions ?? [], 'taxonomyPermissions' => $taxonomyPermissions ?? [], 'taxonomyObjects' => $taxonomyObjects ?? [], 'rootPermissions' => $rootPermissions ?? [], 'rootTerm' => $rootTerm ?? (object)['id' => 0]])

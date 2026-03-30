@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ $themeData['locale'] ?? 'en' }}" dir="ltr">
+<html lang="{{ $themeData['locale'] ?? 'en' }}" dir="{{ in_array($themeData['locale'] ?? 'en', ['ar', 'fa', 'he', 'ur']) ? 'rtl' : 'ltr' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,6 +18,13 @@
     {{-- Bootstrap Icons --}}
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
           rel="stylesheet">
+
+    {{-- Font Awesome 6 (used by nav, settings sidebar, action icons) --}}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+          rel="stylesheet" crossorigin="anonymous">
+
+    {{-- Dynamic theme CSS --}}
+    <link href="{{ route('settings.dynamic-css') }}" rel="stylesheet">
 
     {{-- Vite assets (when build pipeline is ready) --}}
     @if(file_exists(public_path('build/manifest.json')))
@@ -130,7 +137,21 @@
     </a>
 
     {{-- Header / Navigation --}}
-    @include('theme::partials.header')
+    @php
+    $headerBg = $themeData['headerBackgroundColor'] ?? '#212529';
+    $logoPath = $themeData['logoPath'] ?? '';
+    $toggleLogo = $themeData['toggleLogo'] ?? true;
+    $toggleLanguageMenu = $themeData['toggleLanguageMenu'] ?? true;
+    $siteTitle = $themeData['siteTitle'] ?? 'OpenRiC';
+    @endphp
+    @include('theme::partials.header', [
+        'headerBg' => $headerBg,
+        'logoPath' => $logoPath,
+        'toggleLogo' => $toggleLogo,
+        'toggleLanguageMenu' => $toggleLanguageMenu,
+        'siteTitle' => $siteTitle,
+        'enabledLanguages' => $enabledLanguages ?? [],
+    ])
 
     {{-- Admin notifications (pending requests, failed jobs) --}}
     @include('theme::partials.admin-notifications')

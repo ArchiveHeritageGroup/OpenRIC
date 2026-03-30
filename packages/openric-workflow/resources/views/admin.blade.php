@@ -1,0 +1,18 @@
+@extends('theme::layouts.1col')
+@section('title', 'Manage Workflows')
+@section('content')
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="fas fa-cog me-2"></i>Workflow Administration</h1>
+    <div>
+        <a href="{{ route('workflow.admin.create') }}" class="btn btn-success"><i class="fas fa-plus me-1"></i>Create Workflow</a>
+        <a href="{{ route('workflow.dashboard') }}" class="btn btn-outline-secondary"><i class="fas fa-arrow-left me-1"></i>Dashboard</a>
+    </div>
+</div>
+@include('theme::partials.alerts')
+@if(count($workflows) === 0)
+    <div class="alert alert-info">No workflows configured yet. Create your first workflow to get started.</div>
+@else
+    <div class="card"><div class="card-body p-0"><div class="table-responsive"><table class="table table-bordered table-hover mb-0"><thead><tr><th>#</th><th>Name</th><th>Scope</th><th>Trigger</th><th>Applies To</th><th>Steps</th><th>Active Tasks</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>@foreach($workflows as $wf)<tr><td>{{ $wf->id }}</td><td><a href="{{ route('workflow.admin.edit', $wf->id) }}">{{ $wf->name }}</a>@if($wf->is_default ?? false)<span class="badge bg-primary ms-1">Default</span>@endif</td><td><span class="badge bg-secondary">{{ ucfirst($wf->scope_type ?? '') }}</span></td><td>{{ str_replace('_', ' ', ucfirst($wf->trigger_event ?? '')) }}</td><td>{{ str_replace('_', ' ', ucfirst($wf->applies_to ?? '')) }}</td><td><span class="badge bg-info">{{ $wf->step_count ?? 0 }}</span></td><td><span class="badge bg-warning text-dark">{{ $wf->active_task_count ?? 0 }}</span></td><td>@if($wf->is_active ?? false)<span class="badge bg-success">Active</span>@else<span class="badge bg-secondary">Inactive</span>@endif</td><td><a href="{{ route('workflow.admin.edit', $wf->id) }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-edit"></i></a><form action="{{ route('workflow.admin.delete', $wf->id) }}" method="POST" class="d-inline" onsubmit="return confirm('Delete this workflow?')">@csrf<button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button></form></td></tr>@endforeach</tbody></table></div></div></div>
+@endif
+@endsection

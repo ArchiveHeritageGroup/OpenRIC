@@ -1,0 +1,20 @@
+{
+    "name": "openric/rad-manage",
+    "description": "RAD (Rules for Archival Description) editor for OpenRiC",
+    "type": "library",
+    "require": {
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\RadManage\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\RadManage\\Providers\\RadManageServiceProvider"
+            ]
+        }
+    }
+}

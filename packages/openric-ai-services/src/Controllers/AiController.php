@@ -1,0 +1,4556 @@
+<?php
+
+namespace OpenRic\AiServices\Controllers;
+
+use OpenRic\AiServices\Services\HtrService;
+use OpenRic\AiServices\Services\LlmService;
+use OpenRic\AiServices\Services\NerService;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+
+/**
+ * AI Services Controller
+ *
+ * Dashboard, configuration, and AJAX endpoints for AI services:
+ * summarize, translate, NER, description suggestion, spellcheck.
+ *
+ * Ported from ahgAIPlugin aiActions.
+ */
+class AiController extends Controller
+{
+    private LlmService $llmService;
+    private NerService $nerService;
+    private HtrService $htrService;
+
+    public function __construct(LlmService $llmService, NerService $nerService, HtrService $htrService)
+    {
+        $this->llmService = $llmService;
+        $this->nerService = $nerService;
+        $this->htrService = $htrService;
+    }
+
+    /**
+     * AI Services dashboard with provider status and usage stats.
+     */
+    public function index()
+    {
+        $configs      = $this->llmService->getConfigurations();
+        $defaultConfig = $this->llmService->getDefaultConfig();
+        $usageStats   = $this->llmService->getUsageStats();
+        $nerStats     = $this->nerService->getStats();
+        $apiHealth    = $this->nerService->getApiHealth();
+
+        // Provider health for active configs
+        $providerHealth = $this->llmService->getAllHealth();
+
+        // AI settings summary
+        $generalSettings = $this->llmService->getAiSettingsByFeature('general');
+
+        return view('ahg-ai-services::index', compact(
+            'configs',
+            'defaultConfig',
+            'usageStats',
+            'nerStats',
+            'apiHealth',
+            'providerHealth',
+            'generalSettings'
+        ));
+    }
+
+    /**
+     * AI Configuration page (GET/POST).
+     */
+    public function config(Request $request)
+    {
+        if ($request->isMethod('post')) {
+            return $this->saveConfig($request);
+        }
+
+        $configs       = $this->llmService->getConfigurations();
+        $defaultConfig = $this->llmService->getDefaultConfig();
+
+        // General AI settings
+        $generalSettings = DB::table('ahg_ai_settings')
+            ->where('feature', 'general')
+            ->get()
+            ->keyBy('setting_key');
+
+        // NER settings
+        $nerSettings = DB::table('ahg_ai_settings')
+            ->where('feature', 'ner')
+            ->get()
+            ->keyBy('setting_key');
+
+        // Summarize settings
+        $summarizeSettings = DB::table('ahg_ai_settings')
+            ->where('feature', 'summarize')
+            ->get()
+            ->keyBy('setting_key');
+
+        // Translate settings
+        $translateSettings = DB::table('ahg_ai_settings')
+            ->where('feature', 'translate')
+            ->get()
+            ->keyBy('setting_key');
+
+        // Spellcheck settings
+        $spellcheckSettings = DB::table('ahg_ai_settings')
+            ->where('feature', 'spellcheck')
+            ->get()
+            ->keyBy('setting_key');
+
+        // Suggest settings
+        $suggestSettings = DB::table('ahg_ai_settings')
+            ->where('feature', 'suggest')
+            ->get()
+            ->keyBy('setting_key');
+
+        return view('ahg-ai-services::config', compact(
+            'configs',
+            'defaultConfig',
+            'generalSettings',
+            'nerSettings',
+            'summarizeSettings',
+            'translateSettings',
+            'spellcheckSettings',
+            'suggestSettings'
+        ));
+    }
+
+    /**
+     * Save AI configuration (POST handler).
+     */
+    private function saveConfig(Request $request): \Illuminate\Http\RedirectResponse
+    {
+        $action = $request->input('_action');
+
+        // Handle LLM config CRUD
+        if ($action === 'create_config') {
+            $request->validate([
+                'provider' => 'required|in:openai,anthropic,ollama',
+                'name'     => 'required|string|max:100',
+                'model'    => 'required|string|max:100',
+            ]);
+
+            $this->llmService->createConfiguration($request->only([
+                'provider', 'name', 'is_active', 'is_default',
+                'endpoint_url', 'api_key', 'model', 'max_tokens',
+                'temperature', 'timeout_seconds',
+            ]));
+
+            return redirect()->route('admin.ai.config')
+                ->with('success', 'LLM configuration created.');
+        }
+
+        if ($action === 'update_config') {
+            $request->validate([
+                'config_id' => 'required|integer',
+                'name'      => 'required|string|max:100',
+                'model'     => 'required|string|max:100',
+            ]);
+
+            $this->llmService->updateConfiguration(
+                (int) $request->input('config_id'),
+                $request->only([
+                    'name', 'is_active', 'is_default',
+                    'endpoint_url', 'api_key', 'model', 'max_tokens',
+                    'temperature', 'timeout_seconds',
+                ])
+            );
+
+            return redirect()->route('admin.ai.config')
+                ->with('success', 'LLM configuration updated.');
+        }
+
+        if ($action === 'delete_config') {
+            $this->llmService->deleteConfiguration((int) $request->input('config_id'));
+
+            return redirect()->route('admin.ai.config')
+                ->with('success', 'LLM configuration deleted.');
+        }
+
+        // Handle AI settings save
+        if ($action === 'save_settings') {
+            $features = ['general', 'ner', 'summarize', 'translate', 'spellcheck', 'suggest'];
+
+            foreach ($features as $feature) {
+                $settingsKey = "settings_{$feature}";
+                $featureSettings = $request->input($settingsKey, []);
+
+                if (is_array($featureSettings)) {
+                    foreach ($featureSettings as $key => $value) {
+                        $this->llmService->saveAiSetting($feature, $key, $value);
+                    }
+                }
+            }
+
+            return redirect()->route('admin.ai.config')
+                ->with('success', 'AI settings saved.');
+        }
+
+        return redirect()->route('admin.ai.config')
+            ->with('error', 'Unknown action.');
+    }
+
+    /**
+     * POST: Summarize text (AJAX/JSON).
+     */
+    public function summarize(Request $request)
+    {
+        $request->validate([
+            'text'       => 'required|string|min:10',
+            'max_length' => 'nullable|integer|min:50|max:5000',
+        ]);
+
+        $text      = $request->input('text');
+        $maxLength = $request->input('max_length', 200);
+
+        $startTime = microtime(true);
+        $result    = $this->llmService->summarize($text, $maxLength);
+        $elapsed   = round((microtime(true) - $startTime) * 1000);
+
+        if ($result === null) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Summarization failed. Check LLM configuration.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success'            => true,
+            'summary'            => $result,
+            'processing_time_ms' => $elapsed,
+        ]);
+    }
+
+    /**
+     * POST: Translate text (AJAX/JSON).
+     */
+    public function translate(Request $request)
+    {
+        $request->validate([
+            'text'        => 'required|string|min:1',
+            'target_lang' => 'required|string|max:10',
+        ]);
+
+        $text       = $request->input('text');
+        $targetLang = $request->input('target_lang');
+
+        // Try the dedicated translation API first
+        $translationEndpoint = $this->llmService->getAiSetting('translate', 'mt.endpoint')
+            ?? $this->llmService->getAiSetting('translate', 'mt_endpoint');
+
+        if ($translationEndpoint) {
+            try {
+                $mtApiKey = $this->llmService->getAiSetting('translate', 'mt.api_key', '');
+                $mtTimeout = (int) $this->llmService->getAiSetting('translate', 'mt.timeout_seconds', '60');
+                $sourceLang = $this->llmService->getAiSetting('translate', 'translation_source_lang', 'en');
+
+                $response = \Illuminate\Support\Facades\Http::timeout($mtTimeout)
+                    ->withHeaders([
+                        'Content-Type' => 'application/json',
+                        'X-API-Key'    => $mtApiKey,
+                    ])
+                    ->post($translationEndpoint, [
+                        'text'        => $text,
+                        'source_lang' => $sourceLang,
+                        'target_lang' => $targetLang,
+                    ]);
+
+                if ($response->successful()) {
+                    $body = $response->json();
+                    if (!empty($body['success']) && !empty($body['translation'])) {
+                        return response()->json([
+                            'success'     => true,
+                            'translation' => $body['translation'],
+                            'source'      => 'api',
+                        ]);
+                    }
+                }
+            } catch (\Exception $e) {
+                // Fall through to LLM
+            }
+        }
+
+        $startTime   = microtime(true);
+        $translation = $this->llmService->translate($text, $targetLang);
+        $elapsed     = round((microtime(true) - $startTime) * 1000);
+
+        if ($translation === null) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Translation failed. Check LLM configuration.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success'            => true,
+            'translation'        => $translation,
+            'source'             => 'llm',
+            'processing_time_ms' => $elapsed,
+        ]);
+    }
+
+    /**
+     * POST: Extract named entities (AJAX/JSON).
+     */
+    public function extractEntities(Request $request)
+    {
+        $request->validate([
+            'text'      => 'required|string|min:10',
+            'object_id' => 'nullable|integer',
+        ]);
+
+        $text     = $request->input('text');
+        $objectId = $request->input('object_id');
+
+        $startTime = microtime(true);
+        $entities  = $this->nerService->extract($text);
+        $elapsed   = round((microtime(true) - $startTime) * 1000);
+
+        $entityCount = count($entities['persons'])
+            + count($entities['organizations'])
+            + count($entities['places'])
+            + count($entities['dates']);
+
+        // If an object ID is given, store entities for review
+        $stored = 0;
+        if ($objectId) {
+            $stored = $this->nerService->createAccessPoints($objectId, $entities);
+        }
+
+        return response()->json([
+            'success'            => true,
+            'entities'           => $entities,
+            'entity_count'       => $entityCount,
+            'stored_count'       => $stored,
+            'processing_time_ms' => $elapsed,
+        ]);
+    }
+
+    /**
+     * POST: Generate description suggestion (AJAX/JSON).
+     */
+    public function suggestDescription(Request $request)
+    {
+        $request->validate([
+            'title'   => 'required|string|min:2',
+            'context' => 'nullable|string',
+        ]);
+
+        $title   = $request->input('title');
+        $context = $request->input('context', '');
+
+        $startTime = microtime(true);
+        $result    = $this->llmService->suggestDescription($title, $context);
+        $elapsed   = round((microtime(true) - $startTime) * 1000);
+
+        if ($result === null) {
+            return response()->json([
+                'success' => false,
+                'error'   => 'Description suggestion failed. Check LLM configuration.',
+            ], 500);
+        }
+
+        return response()->json([
+            'success'            => true,
+            'description'        => $result,
+            'processing_time_ms' => $elapsed,
+        ]);
+    }
+
+    /**
+     * POST: Spellcheck text (AJAX/JSON).
+     */
+    public function spellcheck(Request $request)
+    {
+        $request->validate([
+            'text' => 'required|string|min:5',
+        ]);
+
+        $text = $request->input('text');
+
+        $startTime   = microtime(true);
+        $corrections = $this->llmService->spellcheck($text);
+        $elapsed     = round((microtime(true) - $startTime) * 1000);
+
+        return response()->json([
+            'success'            => true,
+            'corrections'        => $corrections,
+            'correction_count'   => count($corrections),
+            'processing_time_ms' => $elapsed,
+        ]);
+    }
+
+    /**
+     * POST: Test LLM connection (AJAX/JSON).
+     */
+    public function testConnection(Request $request)
+    {
+        $configId = $request->input('config_id');
+
+        $result = $this->llmService->testConnection($configId ? (int) $configId : null);
+
+        return response()->json($result);
+    }
+
+    public function batch(Request $request)
+    {
+        $rows = DB::table('job')->where('name', 'LIKE', '%ai%')->orderByDesc('completed_at')->get();
+        return view('ahg-ai-services::batch', ['rows' => $rows]);
+    }
+
+    public function batchView(int $id)
+    {
+        $record = DB::table('job')->where('id', $id)->first();
+        if (!$record) abort(404);
+        return view('ahg-ai-services::batch-view', ['record' => $record]);
+    }
+
+    public function pdfOverlay(Request $request)
+    {
+        return view('ahg-ai-services::pdf-overlay');
+    }
+
+    public function review(Request $request)
+    {
+        return view('ahg-ai-services::review', ['rows' => collect()]);
+    }
+
+    public function suggestReview(Request $request)
+    {
+        return view('ahg-ai-services::suggest-review', ['rows' => collect()]);
+    }
+
+    /* ================================================================== */
+    /*  NER Entity Management (ported from AtoM ahgAIPlugin)              */
+    /* ================================================================== */
+
+    private const CORPORATE_BODY_ID      = 131;
+    private const PERSON_ID              = 132;
+    private const NAME_ACCESS_POINT_ID   = 161;
+    private const TAXONOMY_PLACE_ID      = 42;
+    private const TAXONOMY_SUBJECT_ID    = 35;
+
+    /**
+     * GET /admin/ai/ner/extract/{id}
+     * Run NER extraction on an information object.
+     */
+    public function nerExtract(int $id)
+    {
+        $culture = app()->getLocale();
+        $object  = $this->getInformationObject($id, $culture);
+
+        if (!$object) {
+            return response()->json(['success' => false, 'error' => 'Object not found']);
+        }
+
+        $text    = $this->getObjectText($object);
+        $pdfPath = $this->getDigitalObjectPath($id, 'pdf');
+
+        $apiUrl = $this->getAiApiUrl();
+        $apiKey = $this->getAiApiKey();
+
+        $result = null;
+
+        if ($pdfPath && file_exists($pdfPath)) {
+            $result = $this->callNerApi($apiUrl, $apiKey, null, $pdfPath);
+            // Merge metadata entities if text also available
+            if ($result && ($result['success'] ?? false) && !empty($text)) {
+                $metaResult = $this->callNerApi($apiUrl, $apiKey, $text);
+                if ($metaResult && ($metaResult['success'] ?? false)) {
+                    foreach ($metaResult['entities'] as $type => $values) {
+                        if (!isset($result['entities'][$type])) {
+                            $result['entities'][$type] = [];
+                        }
+                        $result['entities'][$type] = array_values(array_unique(
+                            array_merge($result['entities'][$type], $values)
+                        ));
+                    }
+                    $result['entity_count'] = array_sum(array_map('count', $result['entities']));
+                }
+            }
+        } else {
+            if (empty(trim($text))) {
+                return response()->json(['success' => false, 'error' => 'No text content found']);
+            }
+            $result = $this->callNerApi($apiUrl, $apiKey, $text);
+        }
+
+        if (!$result || !($result['success'] ?? false)) {
+            return response()->json($result ?: ['success' => false, 'error' => 'NER extraction failed']);
+        }
+
+        $this->saveExtraction($id, $result['entities']);
+
+        return response()->json([
+            'success'            => true,
+            'entities'           => $result['entities'],
+            'entity_count'       => $result['entity_count'] ?? 0,
+            'processing_time_ms' => $result['processing_time_ms'] ?? 0,
+            'source'             => $pdfPath ? 'pdf+metadata' : 'metadata',
+        ]);
+    }
+
+    /**
+     * GET /admin/ai/ner/entities/{id}
+     * Get pending NER entities for an information object.
+     */
+    public function nerGetEntities(int $id)
+    {
+        $entities = DB::table('ahg_ner_entity')
+            ->where('object_id', $id)
+            ->where('status', 'pending')
+            ->orderBy('entity_type')
+            ->orderBy('entity_value')
+            ->get();
+
+        $grouped = [];
+        foreach ($entities as $entity) {
+            $type = $entity->entity_type;
+            if (!isset($grouped[$type])) {
+                $grouped[$type] = [];
+            }
+
+            if ($type === 'PERSON' || $type === 'ORG') {
+                $matches = $this->findMatchingActors($entity->entity_value);
+            } elseif ($type === 'GPE') {
+                $matches = $this->findMatchingPlaces($entity->entity_value);
+            } else {
+                $matches = ['exact' => [], 'partial' => []];
+            }
+
+            $grouped[$type][] = [
+                'id'              => $entity->id,
+                'value'           => $entity->entity_value,
+                'status'          => $entity->status,
+                'exact_matches'   => $matches['exact'],
+                'partial_matches' => $matches['partial'],
+            ];
+        }
+
+        return response()->json(['success' => true, 'entities' => $grouped]);
+    }
+
+    /**
+     * POST /admin/ai/ner/entity/update
+     * Update a single NER entity decision.
+     */
+    public function nerUpdateEntity(Request $request)
+    {
+        $entityId = $request->input('entity_id');
+        $action   = $request->input('decision');
+        $targetId = $request->input('target_id');
+        $userId   = auth()->id();
+
+        $entity = DB::table('ahg_ner_entity')->where('id', $entityId)->first();
+        if (!$entity) {
+            return response()->json(['success' => false, 'error' => 'Entity not found']);
+        }
+
+        $update = [
+            'status'      => $action === 'link' ? 'linked' : $action,
+            'reviewed_by' => $userId,
+            'reviewed_at' => now(),
+        ];
+        if ($targetId) {
+            $update['linked_actor_id'] = $targetId;
+        }
+
+        DB::table('ahg_ner_entity')->where('id', $entityId)->update($update);
+
+        if ($action === 'link' && $targetId) {
+            if (in_array($entity->entity_type, ['PERSON', 'ORG'])) {
+                $this->linkActorToObject($entity->object_id, $targetId);
+            } elseif ($entity->entity_type === 'GPE') {
+                $this->linkPlaceToObject($entity->object_id, $targetId);
+            } elseif ($entity->entity_type === 'DATE') {
+                $this->linkSubjectToObject($entity->object_id, $targetId);
+            }
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * POST /admin/ai/ner/create/actor
+     */
+    public function nerCreateActor(Request $request)
+    {
+        $entityId   = $request->input('entity_id');
+        $entityType = $request->input('entity_type', 'PERSON');
+        $culture    = app()->getLocale();
+
+        $entity = DB::table('ahg_ner_entity')->where('id', $entityId)->first();
+        if (!$entity) {
+            return response()->json(['success' => false, 'error' => 'Entity not found']);
+        }
+
+        // Check existing
+        $existing = DB::table('actor_i18n')
+            ->where('authorized_form_of_name', $entity->entity_value)
+            ->first();
+
+        if ($existing) {
+            $this->linkActorToObject($entity->object_id, $existing->id);
+            DB::table('ahg_ner_entity')->where('id', $entityId)->update([
+                'status'          => 'linked',
+                'linked_actor_id' => $existing->id,
+                'reviewed_at'     => now(),
+            ]);
+            return response()->json(['success' => true, 'action' => 'linked_existing', 'id' => $existing->id]);
+        }
+
+        $entityTypeId = ($entityType === 'ORG') ? self::CORPORATE_BODY_ID : self::PERSON_ID;
+
+        $actorId = DB::table('object')->insertGetId([
+            'class_name' => 'QubitActor',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('actor')->insert([
+            'id'             => $actorId,
+            'entity_type_id' => $entityTypeId,
+            'source_culture' => $culture,
+        ]);
+
+        DB::table('actor_i18n')->insert([
+            'id'                       => $actorId,
+            'culture'                  => $culture,
+            'authorized_form_of_name'  => $entity->entity_value,
+        ]);
+
+        DB::table('slug')->insert([
+            'object_id' => $actorId,
+            'slug'      => $this->generateUniqueSlug($entity->entity_value),
+        ]);
+
+        $this->linkActorToObject($entity->object_id, $actorId);
+
+        DB::table('ahg_ner_entity')->where('id', $entityId)->update([
+            'status'          => 'linked',
+            'linked_actor_id' => $actorId,
+            'reviewed_at'     => now(),
+        ]);
+
+        return response()->json(['success' => true, 'action' => 'created', 'id' => $actorId]);
+    }
+
+    /**
+     * POST /admin/ai/ner/create/place
+     */
+    public function nerCreatePlace(Request $request)
+    {
+        $entityId = $request->input('entity_id');
+        $culture  = app()->getLocale();
+
+        $entity = DB::table('ahg_ner_entity')->where('id', $entityId)->first();
+        if (!$entity) {
+            return response()->json(['success' => false, 'error' => 'Entity not found']);
+        }
+
+        $existing = DB::table('term')
+            ->join('term_i18n', 'term.id', '=', 'term_i18n.id')
+            ->where('term.taxonomy_id', self::TAXONOMY_PLACE_ID)
+            ->where('term_i18n.name', $entity->entity_value)
+            ->first();
+
+        if ($existing) {
+            $this->linkPlaceToObject($entity->object_id, $existing->id);
+            DB::table('ahg_ner_entity')->where('id', $entityId)->update([
+                'status'          => 'linked',
+                'linked_actor_id' => $existing->id,
+                'reviewed_at'     => now(),
+            ]);
+            return response()->json(['success' => true, 'action' => 'linked_existing', 'id' => $existing->id]);
+        }
+
+        $termId = DB::table('object')->insertGetId([
+            'class_name' => 'QubitTerm',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('term')->insert([
+            'id'             => $termId,
+            'taxonomy_id'    => self::TAXONOMY_PLACE_ID,
+            'source_culture' => $culture,
+        ]);
+
+        DB::table('term_i18n')->insert([
+            'id'      => $termId,
+            'culture' => $culture,
+            'name'    => $entity->entity_value,
+        ]);
+
+        DB::table('slug')->insert([
+            'object_id' => $termId,
+            'slug'      => $this->generateUniqueSlug($entity->entity_value),
+        ]);
+
+        $this->linkPlaceToObject($entity->object_id, $termId);
+
+        DB::table('ahg_ner_entity')->where('id', $entityId)->update([
+            'status'          => 'linked',
+            'linked_actor_id' => $termId,
+            'reviewed_at'     => now(),
+        ]);
+
+        return response()->json(['success' => true, 'action' => 'created', 'id' => $termId]);
+    }
+
+    /**
+     * POST /admin/ai/ner/create/subject
+     */
+    public function nerCreateSubject(Request $request)
+    {
+        $entityId = $request->input('entity_id');
+        $culture  = app()->getLocale();
+
+        $entity = DB::table('ahg_ner_entity')->where('id', $entityId)->first();
+        if (!$entity) {
+            return response()->json(['success' => false, 'error' => 'Entity not found']);
+        }
+
+        $existing = DB::table('term')
+            ->join('term_i18n', 'term.id', '=', 'term_i18n.id')
+            ->where('term.taxonomy_id', self::TAXONOMY_SUBJECT_ID)
+            ->where('term_i18n.name', $entity->entity_value)
+            ->first();
+
+        if ($existing) {
+            $this->linkSubjectToObject($entity->object_id, $existing->id);
+            DB::table('ahg_ner_entity')->where('id', $entityId)->update([
+                'status'          => 'linked',
+                'linked_actor_id' => $existing->id,
+                'reviewed_at'     => now(),
+            ]);
+            return response()->json(['success' => true, 'action' => 'linked_existing', 'id' => $existing->id]);
+        }
+
+        $termId = DB::table('object')->insertGetId([
+            'class_name' => 'QubitTerm',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('term')->insert([
+            'id'             => $termId,
+            'taxonomy_id'    => self::TAXONOMY_SUBJECT_ID,
+            'source_culture' => $culture,
+        ]);
+
+        DB::table('term_i18n')->insert([
+            'id'      => $termId,
+            'culture' => $culture,
+            'name'    => $entity->entity_value,
+        ]);
+
+        DB::table('slug')->insert([
+            'object_id' => $termId,
+            'slug'      => $this->generateUniqueSlug($entity->entity_value),
+        ]);
+
+        $this->linkSubjectToObject($entity->object_id, $termId);
+
+        DB::table('ahg_ner_entity')->where('id', $entityId)->update([
+            'status'          => 'linked',
+            'linked_actor_id' => $termId,
+            'reviewed_at'     => now(),
+        ]);
+
+        return response()->json(['success' => true, 'action' => 'created', 'id' => $termId]);
+    }
+
+    /**
+     * GET /admin/ai/ner/health
+     */
+    public function nerHealth()
+    {
+        $apiUrl = $this->getAiApiUrl();
+        $apiKey = $this->getAiApiKey();
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(10)
+                ->withHeaders(['X-API-Key' => $apiKey])
+                ->get($apiUrl . '/ai/v1/health');
+
+            return response()->json($response->json());
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * POST /admin/ai/ner/bulk-save
+     */
+    public function nerBulkSave(Request $request)
+    {
+        $data = $request->json()->all();
+        if (!isset($data['decisions'])) {
+            $data = ['decisions' => $request->input('decisions', [])];
+        }
+        if (is_string($data['decisions'])) {
+            $data['decisions'] = json_decode($data['decisions'], true) ?: [];
+        }
+
+        $culture = app()->getLocale();
+        $userId  = auth()->id();
+        $results = ['success' => 0, 'failed' => 0, 'errors' => []];
+
+        foreach ($data['decisions'] as $decision) {
+            try {
+                $entityId = $decision['entity_id'];
+                $action   = $decision['action'];
+
+                $entity = DB::table('ahg_ner_entity')->where('id', $entityId)->first();
+                if (!$entity) {
+                    $results['failed']++;
+                    $results['errors'][] = "Entity {$entityId} not found";
+                    continue;
+                }
+
+                // Apply edits if any
+                $hasValueEdit = isset($decision['edited_value']) && !empty($decision['edited_value']) && $decision['edited_value'] !== $entity->entity_value;
+                $hasTypeEdit  = isset($decision['edited_type']) && !empty($decision['edited_type']) && $decision['edited_type'] !== $entity->entity_type;
+
+                $updateData = [];
+                if ($hasValueEdit) {
+                    $updateData['original_value'] = $entity->entity_value;
+                    $updateData['entity_value']   = $decision['edited_value'];
+                    $entity->entity_value = $decision['edited_value'];
+                }
+                if ($hasTypeEdit) {
+                    $updateData['original_type'] = $entity->entity_type;
+                    $updateData['entity_type']   = $decision['edited_type'];
+                    $entity->entity_type = $decision['edited_type'];
+                }
+                if ($hasValueEdit && $hasTypeEdit) {
+                    $updateData['correction_type'] = 'both';
+                } elseif ($hasValueEdit) {
+                    $updateData['correction_type'] = 'value_edit';
+                } elseif ($hasTypeEdit) {
+                    $updateData['correction_type'] = 'type_change';
+                }
+
+                if (!empty($updateData)) {
+                    DB::table('ahg_ner_entity')->where('id', $entityId)->update($updateData);
+                }
+
+                if ($action === 'create') {
+                    $createType = $decision['create_type'] ?? 'create_subject';
+                    $this->processNerCreate($entity, $createType, $culture);
+                } elseif ($action === 'create_date') {
+                    $this->processDateCreate($entity);
+                } elseif ($action === 'link') {
+                    $this->processNerLink($entity, $decision['target_id']);
+                } elseif (in_array($action, ['reject', 'approved'])) {
+                    DB::table('ahg_ner_entity')->where('id', $entityId)->update([
+                        'status'          => $action,
+                        'correction_type' => $action === 'reject' ? 'rejected' : 'approved',
+                        'reviewed_at'     => now(),
+                    ]);
+                }
+
+                $results['success']++;
+            } catch (\Exception $e) {
+                $results['failed']++;
+                $results['errors'][] = $e->getMessage();
+            }
+        }
+
+        return response()->json(['success' => true, 'results' => $results]);
+    }
+
+    /**
+     * GET /admin/ai/ner/pdf-overlay/{id}
+     * PDF overlay viewer for NER entity highlights.
+     */
+    public function nerPdfOverlay(int $id)
+    {
+        $culture = app()->getLocale();
+        $object  = $this->getInformationObject($id, $culture);
+        if (!$object) {
+            abort(404, 'Object not found');
+        }
+
+        $digitalObject = DB::table('digital_object')
+            ->where('object_id', $id)
+            ->whereNull('parent_id')
+            ->orderByDesc('id')
+            ->first();
+
+        $docInfo = null;
+        if ($digitalObject) {
+            $mimeType = $digitalObject->mime_type ?? '';
+            $isPdf    = str_contains($mimeType, 'pdf');
+            $webPath  = rtrim($digitalObject->path ?? '', '/') . '/' . ($digitalObject->name ?? '');
+            $absolutePath = '/mnt/nas/heratio/archive/' . ltrim($webPath, '/');
+
+            $pageCount = 1;
+            if ($isPdf && file_exists($absolutePath)) {
+                $output = [];
+                exec("pdfinfo " . escapeshellarg($absolutePath) . " 2>/dev/null | grep Pages", $output);
+                if (!empty($output[0])) {
+                    $pageCount = (int) preg_replace('/[^0-9]/', '', $output[0]);
+                }
+            }
+
+            $docInfo = [
+                'is_pdf'     => $isPdf,
+                'mime_type'  => $mimeType,
+                'url'        => $webPath,
+                'page_count' => $pageCount,
+                'filename'   => $digitalObject->name ?? '',
+            ];
+        }
+
+        $entityCounts = DB::table('ahg_ner_entity')
+            ->where('object_id', $id)
+            ->whereIn('status', ['approved', 'linked'])
+            ->select('entity_type', DB::raw('COUNT(*) as count'))
+            ->groupBy('entity_type')
+            ->pluck('count', 'entity_type')
+            ->toArray();
+
+        return view('ahg-ai-services::ner-pdf-overlay', [
+            'object'        => $object,
+            'objectId'      => $id,
+            'docInfo'       => $docInfo,
+            'entityCounts'  => $entityCounts,
+            'totalEntities' => array_sum($entityCounts),
+        ]);
+    }
+
+    /**
+     * GET /admin/ai/ner/approved-entities/{id}
+     * Get approved/linked NER entities for an object (JSON).
+     */
+    public function nerGetApprovedEntities(int $id)
+    {
+        $culture = app()->getLocale();
+
+        $entities = DB::table('ahg_ner_entity')
+            ->where('object_id', $id)
+            ->whereIn('status', ['approved', 'linked'])
+            ->select('id', 'entity_type', 'entity_value', 'confidence', 'status', 'linked_actor_id')
+            ->orderBy('entity_type')
+            ->orderBy('entity_value')
+            ->get();
+
+        $typeConfig = [
+            'PERSON'      => ['color' => 'rgba(78, 121, 167, 0.35)', 'border' => '#4e79a7', 'label' => 'Person'],
+            'PER'         => ['color' => 'rgba(78, 121, 167, 0.35)', 'border' => '#4e79a7', 'label' => 'Person'],
+            'ORG'         => ['color' => 'rgba(89, 161, 79, 0.35)', 'border' => '#59a14f', 'label' => 'Organization'],
+            'GPE'         => ['color' => 'rgba(225, 87, 89, 0.35)', 'border' => '#e15759', 'label' => 'Place'],
+            'LOC'         => ['color' => 'rgba(225, 87, 89, 0.35)', 'border' => '#e15759', 'label' => 'Location'],
+            'DATE'        => ['color' => 'rgba(176, 122, 161, 0.35)', 'border' => '#b07aa1', 'label' => 'Date'],
+            'TIME'        => ['color' => 'rgba(176, 122, 161, 0.35)', 'border' => '#b07aa1', 'label' => 'Time'],
+            'EVENT'       => ['color' => 'rgba(118, 183, 178, 0.35)', 'border' => '#76b7b2', 'label' => 'Event'],
+            'WORK_OF_ART' => ['color' => 'rgba(255, 157, 167, 0.35)', 'border' => '#ff9da7', 'label' => 'Work'],
+        ];
+
+        $grouped = [];
+        foreach ($entities as $entity) {
+            $type = $entity->entity_type;
+            if (!isset($grouped[$type])) {
+                $config = $typeConfig[$type] ?? ['color' => 'rgba(186, 186, 186, 0.35)', 'border' => '#bababa', 'label' => $type];
+                $grouped[$type] = [
+                    'type'        => $type,
+                    'label'       => $config['label'],
+                    'color'       => $config['color'],
+                    'borderColor' => $config['border'],
+                    'entities'    => [],
+                ];
+            }
+
+            $linkedName = null;
+            if ($entity->linked_actor_id) {
+                $linkedName = $this->getLinkedEntityName($entity->linked_actor_id, $type, $culture);
+            }
+
+            $grouped[$type]['entities'][] = [
+                'id'            => $entity->id,
+                'value'         => $entity->entity_value,
+                'confidence'    => (float) $entity->confidence,
+                'status'        => $entity->status,
+                'linkedActorId' => $entity->linked_actor_id,
+                'linkedName'    => $linkedName,
+            ];
+        }
+
+        return response()->json([
+            'success'      => true,
+            'object_id'    => $id,
+            'entity_count' => count($entities),
+            'entity_types' => array_values($grouped),
+        ]);
+    }
+
+    /**
+     * GET /admin/ai/htr/{id}
+     * HTR (Handwriting Text Recognition) for a single object.
+     */
+    public function htrForObject(Request $request, int $id)
+    {
+        $culture = app()->getLocale();
+        $object  = $this->getInformationObject($id, $culture);
+
+        if (!$object) {
+            return response()->json(['success' => false, 'error' => 'Object not found']);
+        }
+
+        $imagePath = $this->getDigitalObjectPath($id, 'image');
+        if (!$imagePath || !file_exists($imagePath)) {
+            return response()->json(['success' => false, 'error' => 'No image found for HTR']);
+        }
+
+        $mode     = $request->input('mode', 'all');
+        $useZones = $request->boolean('use_zones', true);
+
+        $apiUrl = $this->getAiApiUrl();
+        $apiKey = $this->getAiApiKey();
+
+        $startTime = microtime(true);
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(120)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'X-API-Key'    => $apiKey,
+                ])
+                ->post($apiUrl . '/ai/v1/htr', [
+                    'image_path' => $imagePath,
+                    'mode'       => $mode,
+                    'use_zones'  => $useZones,
+                ]);
+
+            $elapsed = round((microtime(true) - $startTime) * 1000);
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'success' => false,
+                    'error'   => $response->json('error') ?? 'HTTP ' . $response->status(),
+                ]);
+            }
+
+            $result = $response->json();
+
+            $data = [
+                'success'            => true,
+                'mode'               => $mode,
+                'use_zones'          => $result['use_zones'] ?? $useZones,
+                'results'            => $result['results'] ?? [],
+                'text'               => $result['text'] ?? '',
+                'count'              => count($result['results'] ?? []),
+                'processing_time_ms' => $elapsed,
+                'image_path'         => $imagePath,
+            ];
+
+            if (!empty($result['zones'])) {
+                $data['zones']          = $result['zones'];
+                $data['zones_detected'] = $result['zones_detected'] ?? count($result['zones']);
+            }
+
+            return response()->json($data);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => 'Connection error: ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * GET /admin/ai/summarize/{id}
+     * Summarize an information object's content.
+     */
+    public function summarizeObject(Request $request, int $id)
+    {
+        $culture   = app()->getLocale();
+        $maxLength = (int) $request->input('max_length', 1000);
+        $minLength = (int) $request->input('min_length', 100);
+
+        $object = $this->getInformationObject($id, $culture);
+        if (!$object) {
+            return response()->json(['success' => false, 'error' => 'Object not found']);
+        }
+
+        $apiUrl = $this->getAiApiUrl();
+        $apiKey = $this->getAiApiKey();
+
+        $pdfPath = $this->getDigitalObjectPath($id);
+        $text    = $this->getObjectTextForSummary($object);
+
+        if (empty(trim($text)) && (!$pdfPath || !file_exists($pdfPath))) {
+            return response()->json(['success' => false, 'error' => 'No text content found to summarize']);
+        }
+
+        $startTime = microtime(true);
+
+        try {
+            $payload = ['max_length' => $maxLength, 'min_length' => $minLength];
+            if ($pdfPath && file_exists($pdfPath)) {
+                $payload['pdf_path'] = $pdfPath;
+            } else {
+                $payload['text'] = $text;
+            }
+
+            $response = \Illuminate\Support\Facades\Http::timeout(120)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'X-API-Key'    => $apiKey,
+                ])
+                ->post($apiUrl . '/ai/v1/summarize', $payload);
+
+            $elapsed = round((microtime(true) - $startTime) * 1000);
+
+            if (!$response->successful()) {
+                return response()->json(['success' => false, 'error' => $response->json('error') ?? 'Summarization failed']);
+            }
+
+            $result  = $response->json();
+            $summary = $result['summary'] ?? null;
+
+            if (empty($summary)) {
+                return response()->json(['success' => false, 'error' => 'No summary generated']);
+            }
+
+            $saved = $this->saveScopeAndContent($id, $summary, $culture);
+
+            return response()->json([
+                'success'            => true,
+                'summary'            => $summary,
+                'summary_length'     => strlen($summary),
+                'original_length'    => $result['original_length'] ?? 0,
+                'processing_time_ms' => $elapsed,
+                'saved'              => $saved,
+                'source'             => $pdfPath ? 'pdf' : 'metadata',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /* ================================================================== */
+    /*  LLM Description Suggestion (ported from AtoM ahgAIPlugin)         */
+    /* ================================================================== */
+
+    /**
+     * GET /admin/ai/suggest/{id}
+     * Generate a description suggestion for an object.
+     */
+    public function suggest(Request $request, int $id)
+    {
+        $templateId  = $request->input('template_id');
+        $llmConfigId = $request->input('llm_config_id');
+        $userId      = auth()->id();
+
+        $object = $this->getInformationObject($id, app()->getLocale());
+        if (!$object) {
+            return response()->json(['success' => false, 'error' => 'Object not found']);
+        }
+
+        $result = $this->llmService->generateSuggestion($id, $templateId, $llmConfigId, $userId);
+        return response()->json($result);
+    }
+
+    /**
+     * GET /admin/ai/suggest/{id}/preview
+     * Preview a suggestion without saving.
+     */
+    public function suggestPreview(Request $request, int $id)
+    {
+        $templateId  = $request->input('template_id');
+        $llmConfigId = $request->input('llm_config_id');
+
+        $object = $this->getInformationObject($id, app()->getLocale());
+        if (!$object) {
+            return response()->json(['success' => false, 'error' => 'Object not found']);
+        }
+
+        $context = $this->llmService->gatherContext($id);
+        if (!($context['success'] ?? false)) {
+            return response()->json($context);
+        }
+
+        $template = $this->llmService->getTemplateForObject($id, $templateId);
+        if (!$template) {
+            return response()->json(['success' => false, 'error' => 'No template available']);
+        }
+
+        $prompts = $this->llmService->buildPrompt($template, $context['data']);
+        $result  = $this->llmService->complete($prompts['system'], $prompts['user'], $llmConfigId);
+
+        if (!($result['success'] ?? false)) {
+            return response()->json($result);
+        }
+
+        return response()->json([
+            'success'           => true,
+            'preview_text'      => $result['text'],
+            'existing_text'     => $context['data']['scope_and_content'] ?? null,
+            'tokens_used'       => $result['tokens_used'] ?? 0,
+            'model_used'        => $result['model'] ?? '',
+            'generation_time_ms'=> $result['generation_time_ms'] ?? 0,
+            'template_name'     => $template->name ?? '',
+            'has_ocr'           => !empty($context['data']['ocr_text']),
+            'context_summary'   => [
+                'title'      => $context['data']['title'] ?? '',
+                'identifier' => $context['data']['identifier'] ?? '',
+                'level'      => $context['data']['level_of_description'] ?? '',
+                'date_range' => $context['data']['date_range'] ?? '',
+            ],
+        ]);
+    }
+
+    /**
+     * GET /admin/ai/suggest/{id}/view
+     * View a single suggestion detail.
+     */
+    public function suggestView(int $id)
+    {
+        $culture = app()->getLocale();
+
+        $suggestion = DB::table('ahg_ai_suggestion')->where('id', $id)->first();
+        if (!$suggestion) {
+            return response()->json(['success' => false, 'error' => 'Suggestion not found']);
+        }
+
+        $objectTitle = DB::table('information_object_i18n')
+            ->where('id', $suggestion->object_id)
+            ->where('culture', $culture)
+            ->value('title') ?? 'Untitled';
+
+        $objectSlug = DB::table('slug')
+            ->where('object_id', $suggestion->object_id)
+            ->value('slug');
+
+        return response()->json([
+            'success'      => true,
+            'suggestion'   => $suggestion,
+            'object_title' => $objectTitle,
+            'object_slug'  => $objectSlug,
+        ]);
+    }
+
+    /**
+     * POST /admin/ai/suggest/{id}/decision
+     * Process suggestion decision (approve/reject).
+     */
+    public function suggestDecision(Request $request, int $id)
+    {
+        $decision   = $request->input('decision', '');
+        $editedText = $request->input('edited_text');
+        $notes      = $request->input('notes');
+        $userId     = auth()->id();
+
+        $suggestion = DB::table('ahg_ai_suggestion')->where('id', $id)->first();
+        if (!$suggestion) {
+            return response()->json(['success' => false, 'error' => 'Suggestion not found']);
+        }
+
+        if ($decision === 'approve') {
+            $culture = app()->getLocale();
+            $text    = $editedText ?: $suggestion->suggested_text;
+
+            DB::table('information_object_i18n')
+                ->where('id', $suggestion->object_id)
+                ->where('culture', $culture)
+                ->update(['scope_and_content' => $text]);
+
+            DB::table('ahg_ai_suggestion')->where('id', $id)->update([
+                'status'      => 'approved',
+                'reviewed_by' => $userId,
+                'reviewed_at' => now(),
+                'notes'       => $notes,
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Suggestion approved and applied']);
+        } elseif ($decision === 'reject') {
+            DB::table('ahg_ai_suggestion')->where('id', $id)->update([
+                'status'      => 'rejected',
+                'reviewed_by' => $userId,
+                'reviewed_at' => now(),
+                'notes'       => $notes,
+            ]);
+
+            return response()->json(['success' => true, 'message' => 'Suggestion rejected']);
+        }
+
+        return response()->json(['success' => false, 'error' => 'Invalid decision']);
+    }
+
+    /**
+     * GET /admin/ai/suggest/object/{id}
+     * Get suggestions for a specific object.
+     */
+    public function suggestObject(Request $request, int $id)
+    {
+        $status = $request->input('status');
+
+        $query = DB::table('ahg_ai_suggestion')->where('object_id', $id);
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $suggestions = $query->orderByDesc('created_at')->get();
+
+        return response()->json(['success' => true, 'suggestions' => $suggestions]);
+    }
+
+    /* ================================================================== */
+    /*  LLM Configurations & Health                                        */
+    /* ================================================================== */
+
+    /**
+     * GET /admin/ai/llm/configs
+     */
+    public function llmConfigs(Request $request)
+    {
+        $activeOnly = $request->input('active', '1') === '1';
+
+        $configs = $this->llmService->getConfigurations($activeOnly);
+
+        // Remove encrypted API keys from response
+        foreach ($configs as &$config) {
+            $hasKey = !empty($config->api_key_encrypted);
+            unset($config->api_key_encrypted);
+            $config->has_api_key = $hasKey;
+        }
+
+        return response()->json(['success' => true, 'configs' => $configs]);
+    }
+
+    /**
+     * GET /admin/ai/llm/health
+     */
+    public function llmHealth()
+    {
+        $health = $this->llmService->getAllHealth();
+        return response()->json(['success' => true, 'providers' => $health]);
+    }
+
+    /**
+     * GET /admin/ai/templates
+     * Get prompt templates.
+     */
+    public function templates(Request $request)
+    {
+        $activeOnly = $request->input('active', '1') === '1';
+
+        $query = DB::table('ahg_ai_prompt_template');
+        if ($activeOnly) {
+            $query->where('is_active', 1);
+        }
+
+        $templates = $query->orderBy('name')->get();
+
+        // Template variables
+        $variables = [
+            'title', 'identifier', 'scope_and_content', 'level_of_description',
+            'date_range', 'repository_name', 'parent_title', 'extent_and_medium',
+            'archival_history', 'arrangement', 'access_conditions', 'ocr_text',
+        ];
+
+        return response()->json([
+            'success'   => true,
+            'templates' => $templates,
+            'variables' => $variables,
+        ]);
+    }
+
+    /* ================================================================== */
+    /*  Batch Queue Management                                             */
+    /* ================================================================== */
+
+    /**
+     * GET/POST /admin/ai/batch/create
+     */
+    public function batchCreate(Request $request)
+    {
+        if ($request->isMethod('get')) {
+            $culture      = app()->getLocale();
+            $repositories = DB::table('actor')
+                ->join('actor_i18n', 'actor.id', '=', 'actor_i18n.id')
+                ->where('actor.class_name', 'QubitRepository')
+                ->where('actor_i18n.culture', $culture)
+                ->orderBy('actor_i18n.authorized_form_of_name')
+                ->select('actor.id', 'actor_i18n.authorized_form_of_name as name')
+                ->get();
+
+            return view('ahg-ai-services::batch-create', ['repositories' => $repositories]);
+        }
+
+        // POST - create batch
+        $data = $request->all();
+
+        if (empty($data['name']) || empty($data['task_types'])) {
+            return response()->json(['success' => false, 'error' => 'Name and task types are required']);
+        }
+
+        try {
+            $batchId = DB::table('ahg_ai_batch')->insertGetId([
+                'name'             => $data['name'],
+                'description'      => $data['description'] ?? null,
+                'task_types'       => is_array($data['task_types']) ? implode(',', $data['task_types']) : $data['task_types'],
+                'status'           => 'pending',
+                'priority'         => $data['priority'] ?? 5,
+                'max_concurrent'   => $data['max_concurrent'] ?? 5,
+                'delay_between_ms' => $data['delay_between_ms'] ?? 1000,
+                'max_retries'      => $data['max_retries'] ?? 3,
+                'total_items'      => 0,
+                'completed_items'  => 0,
+                'failed_items'     => 0,
+                'progress_percent' => 0,
+                'created_by'       => auth()->id(),
+                'created_at'       => now(),
+            ]);
+
+            // Get object IDs
+            $objectIds = [];
+            if (!empty($data['object_ids'])) {
+                $objectIds = is_array($data['object_ids']) ? $data['object_ids'] : explode(',', $data['object_ids']);
+            } elseif (!empty($data['repository_id'])) {
+                $query = DB::table('information_object')
+                    ->where('repository_id', $data['repository_id'])
+                    ->where('id', '!=', 1);
+
+                if (!empty($data['level_id'])) {
+                    $query->where('level_of_description_id', $data['level_id']);
+                }
+                $objectIds = $query->limit($data['limit'] ?? 1000)->pluck('id')->toArray();
+            }
+
+            if (empty($objectIds)) {
+                DB::table('ahg_ai_batch')->where('id', $batchId)->delete();
+                return response()->json(['success' => false, 'error' => 'No objects selected']);
+            }
+
+            // Add items
+            $taskTypes = is_array($data['task_types']) ? $data['task_types'] : explode(',', $data['task_types']);
+            $itemCount = 0;
+            foreach ($objectIds as $objectId) {
+                foreach ($taskTypes as $taskType) {
+                    DB::table('ahg_ai_job')->insert([
+                        'batch_id'   => $batchId,
+                        'object_id'  => (int) $objectId,
+                        'task_type'  => trim($taskType),
+                        'status'     => 'pending',
+                        'priority'   => $data['priority'] ?? 5,
+                        'created_at' => now(),
+                    ]);
+                    $itemCount++;
+                }
+            }
+
+            DB::table('ahg_ai_batch')->where('id', $batchId)->update(['total_items' => $itemCount]);
+
+            if (!empty($data['auto_start'])) {
+                DB::table('ahg_ai_batch')->where('id', $batchId)->update(['status' => 'running', 'started_at' => now()]);
+            }
+
+            return response()->json([
+                'success'    => true,
+                'batch_id'   => $batchId,
+                'item_count' => $itemCount,
+                'message'    => "Batch created with {$itemCount} items",
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * GET /admin/ai/batch/{id}/progress
+     */
+    public function batchProgress(int $id)
+    {
+        $batch = DB::table('ahg_ai_batch')->where('id', $id)->first();
+        if (!$batch) {
+            return response()->json(['success' => false, 'error' => 'Batch not found']);
+        }
+
+        $stats = DB::table('ahg_ai_job')
+            ->where('batch_id', $id)
+            ->select('status', DB::raw('COUNT(*) as count'))
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+        return response()->json([
+            'success'          => true,
+            'status'           => $batch->status,
+            'progress_percent' => (float) $batch->progress_percent,
+            'total'            => (int) $batch->total_items,
+            'completed'        => (int) $batch->completed_items,
+            'failed'           => (int) $batch->failed_items,
+            'stats'            => $stats,
+        ]);
+    }
+
+    /**
+     * POST /admin/ai/batch/{id}/action
+     * Batch actions: start, pause, resume, cancel, retry, delete.
+     */
+    public function batchAction(Request $request, int $id)
+    {
+        $action = $request->input('action', '');
+
+        $batch = DB::table('ahg_ai_batch')->where('id', $id)->first();
+        if (!$batch) {
+            return response()->json(['success' => false, 'error' => 'Batch not found']);
+        }
+
+        try {
+            switch ($action) {
+                case 'start':
+                    DB::table('ahg_ai_batch')->where('id', $id)->update(['status' => 'running', 'started_at' => now()]);
+                    $message = 'Batch started';
+                    break;
+
+                case 'pause':
+                    DB::table('ahg_ai_batch')->where('id', $id)->update(['status' => 'paused']);
+                    $message = 'Batch paused';
+                    break;
+
+                case 'resume':
+                    DB::table('ahg_ai_batch')->where('id', $id)->update(['status' => 'running']);
+                    $message = 'Batch resumed';
+                    break;
+
+                case 'cancel':
+                    DB::table('ahg_ai_batch')->where('id', $id)->update(['status' => 'cancelled']);
+                    DB::table('ahg_ai_job')->where('batch_id', $id)->where('status', 'pending')->update(['status' => 'cancelled']);
+                    $message = 'Batch cancelled';
+                    break;
+
+                case 'retry':
+                    $count = DB::table('ahg_ai_job')->where('batch_id', $id)->where('status', 'failed')
+                        ->update(['status' => 'pending', 'error_message' => null, 'attempts' => 0]);
+                    if ($count > 0) {
+                        DB::table('ahg_ai_batch')->where('id', $id)->update(['status' => 'running']);
+                    }
+                    $message = $count > 0 ? "Retrying {$count} failed jobs" : 'No failed jobs to retry';
+                    break;
+
+                case 'delete':
+                    DB::table('ahg_ai_job')->where('batch_id', $id)->delete();
+                    DB::table('ahg_ai_batch')->where('id', $id)->delete();
+                    $message = 'Batch deleted';
+                    break;
+
+                default:
+                    return response()->json(['success' => false, 'error' => 'Unknown action']);
+            }
+
+            return response()->json(['success' => true, 'message' => $message]);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * POST /admin/ai/batch/{id}/process
+     * Process next pending jobs in a batch.
+     */
+    public function batchProcess(int $id)
+    {
+        $batch = DB::table('ahg_ai_batch')->where('id', $id)->where('status', 'running')->first();
+        if (!$batch) {
+            return response()->json(['success' => false, 'error' => 'Batch not found or not running']);
+        }
+
+        $jobs = DB::table('ahg_ai_job')
+            ->where('batch_id', $id)
+            ->where('status', 'pending')
+            ->orderBy('priority')
+            ->limit($batch->max_concurrent ?? 5)
+            ->get();
+
+        $processed = 0;
+        foreach ($jobs as $job) {
+            try {
+                DB::table('ahg_ai_job')->where('id', $job->id)->update([
+                    'status'     => 'processing',
+                    'started_at' => now(),
+                ]);
+
+                // Dispatch to appropriate handler based on task_type
+                $this->processAiJob($job);
+
+                DB::table('ahg_ai_job')->where('id', $job->id)->update([
+                    'status'       => 'completed',
+                    'completed_at' => now(),
+                ]);
+
+                $processed++;
+
+                // Apply delay
+                if (($batch->delay_between_ms ?? 0) > 0) {
+                    usleep($batch->delay_between_ms * 1000);
+                }
+            } catch (\Exception $e) {
+                DB::table('ahg_ai_job')->where('id', $job->id)->update([
+                    'status'        => 'failed',
+                    'error_message' => $e->getMessage(),
+                    'completed_at'  => now(),
+                ]);
+            }
+        }
+
+        // Update batch progress
+        $total     = DB::table('ahg_ai_job')->where('batch_id', $id)->count();
+        $completed = DB::table('ahg_ai_job')->where('batch_id', $id)->where('status', 'completed')->count();
+        $failed    = DB::table('ahg_ai_job')->where('batch_id', $id)->where('status', 'failed')->count();
+        $percent   = $total > 0 ? round(($completed + $failed) / $total * 100, 1) : 0;
+
+        $batchUpdate = [
+            'completed_items'  => $completed,
+            'failed_items'     => $failed,
+            'progress_percent' => $percent,
+        ];
+        if (($completed + $failed) >= $total) {
+            $batchUpdate['status']       = 'completed';
+            $batchUpdate['completed_at'] = now();
+        }
+
+        DB::table('ahg_ai_batch')->where('id', $id)->update($batchUpdate);
+
+        return response()->json(['success' => true, 'processed' => $processed]);
+    }
+
+    /**
+     * GET /admin/ai/job/{id}
+     * View individual job details.
+     */
+    public function jobView(int $id)
+    {
+        $culture = app()->getLocale();
+
+        $job = DB::table('ahg_ai_job')->where('id', $id)->first();
+        if (!$job) {
+            return response()->json(['success' => false, 'error' => 'Job not found']);
+        }
+
+        $object = DB::table('information_object')
+            ->join('slug', 'information_object.id', '=', 'slug.object_id')
+            ->leftJoin('information_object_i18n', function ($join) use ($culture) {
+                $join->on('information_object.id', '=', 'information_object_i18n.id')
+                     ->where('information_object_i18n.culture', '=', $culture);
+            })
+            ->where('information_object.id', $job->object_id)
+            ->select('slug.slug', 'information_object_i18n.title')
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'job'     => $job,
+            'object'  => $object,
+        ]);
+    }
+
+    /* ================================================================== */
+    /*  Private helper methods for NER/Suggest/Batch                       */
+    /* ================================================================== */
+
+    private function getAiApiUrl(): string
+    {
+        return DB::table('ahg_ai_settings')
+            ->where('feature', 'general')
+            ->where('setting_key', 'api_url')
+            ->value('setting_value') ?? 'http://192.168.0.112:5004';
+    }
+
+    private function getAiApiKey(): string
+    {
+        return DB::table('ahg_ai_settings')
+            ->where('feature', 'general')
+            ->where('setting_key', 'api_key')
+            ->value('setting_value') ?? '';
+    }
+
+    private function getInformationObject(int $id, string $culture = 'en'): ?object
+    {
+        return DB::table('information_object')
+            ->leftJoin('information_object_i18n', function ($join) use ($culture) {
+                $join->on('information_object.id', '=', 'information_object_i18n.id')
+                     ->where('information_object_i18n.culture', '=', $culture);
+            })
+            ->where('information_object.id', $id)
+            ->select(
+                'information_object.id',
+                'information_object.parent_id',
+                'information_object.repository_id',
+                'information_object.level_of_description_id',
+                'information_object_i18n.title',
+                'information_object_i18n.scope_and_content as scopeAndContent',
+                'information_object_i18n.archival_history as archivalHistory',
+                'information_object_i18n.extent_and_medium as extentAndMedium',
+                'information_object_i18n.arrangement',
+                'information_object_i18n.physical_characteristics as physicalCharacteristics',
+                'information_object_i18n.acquisition'
+            )
+            ->first();
+    }
+
+    private function getObjectText(object $object): string
+    {
+        $parts = [];
+        if (!empty($object->title))             $parts[] = $object->title;
+        if (!empty($object->scopeAndContent))    $parts[] = $object->scopeAndContent;
+        if (!empty($object->archivalHistory))    $parts[] = $object->archivalHistory;
+        if (!empty($object->extentAndMedium))    $parts[] = $object->extentAndMedium;
+        if (!empty($object->arrangement))        $parts[] = $object->arrangement;
+        return implode("\n\n", $parts);
+    }
+
+    private function getObjectTextForSummary(object $object): string
+    {
+        $parts = [];
+        if (!empty($object->title))                $parts[] = $object->title;
+        if (!empty($object->archivalHistory))       $parts[] = $object->archivalHistory;
+        if (!empty($object->extentAndMedium))       $parts[] = $object->extentAndMedium;
+        if (!empty($object->arrangement))           $parts[] = $object->arrangement;
+        if (!empty($object->physicalCharacteristics)) $parts[] = $object->physicalCharacteristics;
+        if (!empty($object->acquisition))           $parts[] = $object->acquisition;
+        return implode("\n\n", $parts);
+    }
+
+    private function getDigitalObjectPath(int $objectId, string $type = 'any'): ?string
+    {
+        $digitalObject = DB::table('digital_object')
+            ->where('object_id', $objectId)
+            ->whereNull('parent_id')
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$digitalObject) {
+            return null;
+        }
+
+        $pdfExts   = ['pdf'];
+        $imageExts = ['jpg', 'jpeg', 'png', 'gif', 'tif', 'tiff', 'bmp', 'webp'];
+
+        $allowedExts = match ($type) {
+            'pdf'   => $pdfExts,
+            'image' => $imageExts,
+            default => array_merge($pdfExts, $imageExts),
+        };
+
+        $path = $digitalObject->path ?? null;
+        $name = $digitalObject->name ?? null;
+
+        if ($path && $name) {
+            // Try Heratio uploads path
+            $fullPath = '/mnt/nas/heratio/archive/' . ltrim($path, '/') . $name;
+            if (file_exists($fullPath)) {
+                $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+                if (in_array($ext, $allowedExts)) {
+                    return $fullPath;
+                }
+            }
+
+            // Try AtoM path
+            $fullPath = '/usr/share/nginx/archive/' . ltrim($path, '/') . $name;
+            if (file_exists($fullPath)) {
+                $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+                if (in_array($ext, $allowedExts)) {
+                    return $fullPath;
+                }
+            }
+
+            // Try AtoM uploads
+            $fullPath = '/usr/share/nginx/archive/uploads/' . ltrim(str_replace('/uploads/', '', $path), '/') . $name;
+            if (file_exists($fullPath)) {
+                $ext = strtolower(pathinfo($fullPath, PATHINFO_EXTENSION));
+                if (in_array($ext, $allowedExts)) {
+                    return $fullPath;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function callNerApi(string $apiUrl, string $apiKey, ?string $text = null, ?string $pdfPath = null): ?array
+    {
+        try {
+            $payload = [];
+            if ($pdfPath) {
+                $payload['pdf_path'] = $pdfPath;
+            } else {
+                $payload['text'] = $text;
+            }
+
+            $response = \Illuminate\Support\Facades\Http::timeout(120)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'X-API-Key'    => $apiKey,
+                ])
+                ->post($apiUrl . '/ai/v1/ner/extract', $payload);
+
+            return $response->json();
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    private function saveExtraction(int $objectId, array $entities): void
+    {
+        try {
+            DB::table('ahg_ner_entity')
+                ->where('object_id', $objectId)
+                ->where('status', 'pending')
+                ->delete();
+
+            $extractionId = DB::table('ahg_ner_extraction')->insertGetId([
+                'object_id'    => $objectId,
+                'backend_used' => 'local',
+                'status'       => 'pending',
+                'extracted_at' => now(),
+            ]);
+
+            $uniqueEntities = [];
+            foreach ($entities as $type => $values) {
+                $seen = [];
+                foreach ($values as $value) {
+                    $key = strtolower(trim($value));
+                    if (!isset($seen[$key])) {
+                        $seen[$key] = $value;
+                    }
+                }
+                $uniqueEntities[$type] = array_values($seen);
+            }
+
+            foreach ($uniqueEntities as $type => $values) {
+                foreach ($values as $value) {
+                    DB::table('ahg_ner_entity')->insert([
+                        'extraction_id' => $extractionId,
+                        'object_id'     => $objectId,
+                        'entity_type'   => $type,
+                        'entity_value'  => $value,
+                        'status'        => 'pending',
+                        'created_at'    => now(),
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            \Log::error("NER save error: " . $e->getMessage());
+        }
+    }
+
+    private function findMatchingActors(string $entityValue): array
+    {
+        $exact = DB::table('actor_i18n')
+            ->join('actor', 'actor.id', '=', 'actor_i18n.id')
+            ->where('actor_i18n.authorized_form_of_name', $entityValue)
+            ->select('actor.id', 'actor_i18n.authorized_form_of_name as name')
+            ->get()->toArray();
+
+        $partial = DB::table('actor_i18n')
+            ->join('actor', 'actor.id', '=', 'actor_i18n.id')
+            ->where('actor_i18n.authorized_form_of_name', 'LIKE', '%' . $entityValue . '%')
+            ->whereNotIn('actor.id', array_column($exact, 'id'))
+            ->select('actor.id', 'actor_i18n.authorized_form_of_name as name')
+            ->limit(5)->get()->toArray();
+
+        return ['exact' => $exact, 'partial' => $partial];
+    }
+
+    private function findMatchingPlaces(string $entityValue): array
+    {
+        $exact = DB::table('term')
+            ->join('term_i18n', 'term.id', '=', 'term_i18n.id')
+            ->where('term.taxonomy_id', self::TAXONOMY_PLACE_ID)
+            ->where('term_i18n.name', $entityValue)
+            ->select('term.id', 'term_i18n.name')
+            ->get()->toArray();
+
+        $partial = DB::table('term')
+            ->join('term_i18n', 'term.id', '=', 'term_i18n.id')
+            ->where('term.taxonomy_id', self::TAXONOMY_PLACE_ID)
+            ->where('term_i18n.name', 'LIKE', '%' . $entityValue . '%')
+            ->whereNotIn('term.id', array_column($exact, 'id'))
+            ->select('term.id', 'term_i18n.name')
+            ->limit(5)->get()->toArray();
+
+        return ['exact' => $exact, 'partial' => $partial];
+    }
+
+    private function linkActorToObject(int $objectId, int $actorId): void
+    {
+        $culture = app()->getLocale();
+
+        $exists = DB::table('relation')
+            ->where('subject_id', $objectId)
+            ->where('object_id', $actorId)
+            ->where('type_id', self::NAME_ACCESS_POINT_ID)
+            ->exists();
+
+        if (!$exists) {
+            $nextId = DB::table('object')->insertGetId([
+                'class_name' => 'QubitRelation',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('relation')->insert([
+                'source_culture' => $culture,
+                'id'             => $nextId,
+                'subject_id'     => $objectId,
+                'object_id'      => $actorId,
+                'type_id'        => self::NAME_ACCESS_POINT_ID,
+            ]);
+        }
+    }
+
+    private function linkPlaceToObject(int $objectId, int $termId): void
+    {
+        $exists = DB::table('object_term_relation')
+            ->where('object_id', $objectId)
+            ->where('term_id', $termId)
+            ->exists();
+
+        if (!$exists) {
+            $nextId = DB::table('object')->insertGetId([
+                'class_name' => 'QubitObjectTermRelation',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            DB::table('object_term_relation')->insert([
+                'id'        => $nextId,
+                'object_id' => $objectId,
+                'term_id'   => $termId,
+            ]);
+        }
+    }
+
+    private function linkSubjectToObject(int $objectId, int $termId): void
+    {
+        $this->linkPlaceToObject($objectId, $termId);
+    }
+
+    private function generateUniqueSlug(string $name): string
+    {
+        $slug = Str::slug($name);
+        if (empty($slug)) {
+            $slug = 'untitled';
+        }
+
+        $baseSlug = $slug;
+        $counter  = 1;
+        while (DB::table('slug')->where('slug', $slug)->exists()) {
+            $slug = $baseSlug . '-' . $counter;
+            $counter++;
+        }
+
+        return $slug;
+    }
+
+    private function getLinkedEntityName(int $linkedId, string $entityType, string $culture): ?string
+    {
+        if (in_array($entityType, ['PERSON', 'PER', 'ORG'])) {
+            $name = DB::table('actor_i18n')
+                ->where('id', $linkedId)
+                ->where('culture', $culture)
+                ->value('authorized_form_of_name');
+            if ($name) {
+                return $name;
+            }
+        }
+
+        return DB::table('term_i18n')
+            ->where('id', $linkedId)
+            ->where('culture', $culture)
+            ->value('name');
+    }
+
+    private function processNerCreate(object $entity, string $createType, string $culture): void
+    {
+        $type = str_replace('create_', '', $createType);
+
+        if ($type === 'actor') {
+            $existing = DB::table('actor_i18n')
+                ->where('authorized_form_of_name', $entity->entity_value)
+                ->first();
+
+            if ($existing) {
+                $this->linkActorToObject($entity->object_id, $existing->id);
+                $actorId = $existing->id;
+            } else {
+                $entityTypeId = ($entity->entity_type === 'ORG') ? self::CORPORATE_BODY_ID : self::PERSON_ID;
+
+                $actorId = DB::table('object')->insertGetId([
+                    'class_name' => 'QubitActor',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                DB::table('actor')->insert([
+                    'id' => $actorId, 'entity_type_id' => $entityTypeId, 'source_culture' => $culture,
+                ]);
+                DB::table('actor_i18n')->insert([
+                    'id' => $actorId, 'culture' => $culture, 'authorized_form_of_name' => $entity->entity_value,
+                ]);
+                DB::table('slug')->insert([
+                    'object_id' => $actorId, 'slug' => $this->generateUniqueSlug($entity->entity_value),
+                ]);
+                $this->linkActorToObject($entity->object_id, $actorId);
+            }
+            DB::table('ahg_ner_entity')->where('id', $entity->id)->update([
+                'status' => 'linked', 'linked_actor_id' => $actorId, 'reviewed_at' => now(),
+            ]);
+
+        } elseif ($type === 'place') {
+            $existing = DB::table('term')
+                ->join('term_i18n', 'term.id', '=', 'term_i18n.id')
+                ->where('term.taxonomy_id', self::TAXONOMY_PLACE_ID)
+                ->where('term_i18n.name', $entity->entity_value)
+                ->first();
+
+            if ($existing) {
+                $this->linkPlaceToObject($entity->object_id, $existing->id);
+                $termId = $existing->id;
+            } else {
+                $termId = DB::table('object')->insertGetId([
+                    'class_name' => 'QubitTerm', 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                DB::table('term')->insert([
+                    'id' => $termId, 'taxonomy_id' => self::TAXONOMY_PLACE_ID, 'source_culture' => $culture,
+                ]);
+                DB::table('term_i18n')->insert([
+                    'id' => $termId, 'culture' => $culture, 'name' => $entity->entity_value,
+                ]);
+                DB::table('slug')->insert([
+                    'object_id' => $termId, 'slug' => $this->generateUniqueSlug($entity->entity_value),
+                ]);
+                $this->linkPlaceToObject($entity->object_id, $termId);
+            }
+            DB::table('ahg_ner_entity')->where('id', $entity->id)->update([
+                'status' => 'linked', 'linked_actor_id' => $termId, 'reviewed_at' => now(),
+            ]);
+
+        } elseif ($type === 'subject') {
+            $existing = DB::table('term')
+                ->join('term_i18n', 'term.id', '=', 'term_i18n.id')
+                ->where('term.taxonomy_id', self::TAXONOMY_SUBJECT_ID)
+                ->where('term_i18n.name', $entity->entity_value)
+                ->first();
+
+            if ($existing) {
+                $this->linkSubjectToObject($entity->object_id, $existing->id);
+                $termId = $existing->id;
+            } else {
+                $termId = DB::table('object')->insertGetId([
+                    'class_name' => 'QubitTerm', 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                DB::table('term')->insert([
+                    'id' => $termId, 'taxonomy_id' => self::TAXONOMY_SUBJECT_ID, 'source_culture' => $culture,
+                ]);
+                DB::table('term_i18n')->insert([
+                    'id' => $termId, 'culture' => $culture, 'name' => $entity->entity_value,
+                ]);
+                DB::table('slug')->insert([
+                    'object_id' => $termId, 'slug' => $this->generateUniqueSlug($entity->entity_value),
+                ]);
+                $this->linkSubjectToObject($entity->object_id, $termId);
+            }
+            DB::table('ahg_ner_entity')->where('id', $entity->id)->update([
+                'status' => 'linked', 'linked_actor_id' => $termId, 'reviewed_at' => now(),
+            ]);
+
+        } elseif ($type === 'date') {
+            $this->processDateCreate($entity);
+        }
+    }
+
+    private function processNerLink(object $entity, int $targetId): void
+    {
+        if (in_array($entity->entity_type, ['PERSON', 'ORG'])) {
+            $this->linkActorToObject($entity->object_id, $targetId);
+        } elseif ($entity->entity_type === 'GPE') {
+            $this->linkPlaceToObject($entity->object_id, $targetId);
+        } else {
+            $this->linkSubjectToObject($entity->object_id, $targetId);
+        }
+
+        DB::table('ahg_ner_entity')->where('id', $entity->id)->update([
+            'status' => 'linked', 'linked_actor_id' => $targetId, 'reviewed_at' => now(),
+        ]);
+    }
+
+    private function processDateCreate(object $entity): void
+    {
+        $culture = app()->getLocale();
+        $parsed  = $this->parseDateString($entity->entity_value);
+
+        if ($parsed) {
+            $exists = DB::table('event')
+                ->where('object_id', $entity->object_id)
+                ->where('type_id', 111)
+                ->where('start_date', $parsed['start'])
+                ->exists();
+
+            if (!$exists) {
+                $nextId = DB::table('object')->insertGetId([
+                    'class_name' => 'QubitEvent', 'created_at' => now(), 'updated_at' => now(),
+                ]);
+                DB::table('event')->insert([
+                    'id' => $nextId, 'object_id' => $entity->object_id,
+                    'type_id' => 111, 'start_date' => $parsed['start'],
+                    'end_date' => $parsed['end'], 'source_culture' => $culture,
+                ]);
+                DB::table('event_i18n')->insert([
+                    'id' => $nextId, 'culture' => $culture, 'date' => $entity->entity_value,
+                ]);
+
+                DB::table('ahg_ner_entity')->where('id', $entity->id)->update([
+                    'status' => 'linked', 'linked_actor_id' => $nextId, 'reviewed_at' => now(),
+                ]);
+            }
+        }
+    }
+
+    private function parseDateString(string $dateString): ?array
+    {
+        $dateString = trim($dateString);
+        $months = [
+            'january' => '01', 'february' => '02', 'march' => '03', 'april' => '04',
+            'may' => '05', 'june' => '06', 'july' => '07', 'august' => '08',
+            'september' => '09', 'october' => '10', 'november' => '11', 'december' => '12',
+        ];
+
+        if (preg_match('/^(\d{1,2})\s+(\w+)\s+(\d{4})$/i', $dateString, $m)) {
+            $day   = str_pad($m[1], 2, '0', STR_PAD_LEFT);
+            $month = $months[strtolower($m[2])] ?? null;
+            if ($month) {
+                $date = "{$m[3]}-{$month}-{$day}";
+                return ['start' => $date, 'end' => $date];
+            }
+        }
+        if (preg_match('/^(\w+)\s+(\d{4})$/i', $dateString, $m)) {
+            $month = $months[strtolower($m[1])] ?? null;
+            if ($month) {
+                $start   = "{$m[2]}-{$month}-01";
+                $lastDay = date('t', strtotime($start));
+                return ['start' => $start, 'end' => "{$m[2]}-{$month}-{$lastDay}"];
+            }
+        }
+        if (preg_match('/^(\d{4})$/', $dateString, $m)) {
+            return ['start' => "{$m[1]}-01-01", 'end' => "{$m[1]}-12-31"];
+        }
+        if (preg_match('/^(\d{4})-(\d{4})$/', $dateString, $m)) {
+            return ['start' => "{$m[1]}-01-01", 'end' => "{$m[2]}-12-31"];
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $dateString)) {
+            return ['start' => $dateString, 'end' => $dateString];
+        }
+
+        return null;
+    }
+
+    private function saveScopeAndContent(int $objectId, string $summary, string $culture): bool
+    {
+        try {
+            $taggedSummary = '[AI Summarized] ' . $summary;
+
+            $existing = DB::table('information_object_i18n')
+                ->where('id', $objectId)
+                ->where('culture', $culture)
+                ->first();
+
+            if ($existing) {
+                $currentText = $existing->scope_and_content ?? '';
+                if (!empty(trim($currentText)) && !str_starts_with($currentText, '[AI Summarized]')) {
+                    return false;
+                }
+
+                DB::table('information_object_i18n')
+                    ->where('id', $objectId)
+                    ->where('culture', $culture)
+                    ->update(['scope_and_content' => $taggedSummary]);
+            } else {
+                DB::table('information_object_i18n')->insert([
+                    'id' => $objectId, 'culture' => $culture, 'scope_and_content' => $taggedSummary,
+                ]);
+            }
+
+            return true;
+        } catch (\Exception $e) {
+            \Log::error("Error saving scope and content: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function processAiJob(object $job): void
+    {
+        $taskType = $job->task_type;
+        $objectId = $job->object_id;
+
+        switch ($taskType) {
+            case 'ner_extract':
+                $culture = app()->getLocale();
+                $object  = $this->getInformationObject($objectId, $culture);
+                if ($object) {
+                    $text    = $this->getObjectText($object);
+                    $apiUrl  = $this->getAiApiUrl();
+                    $apiKey  = $this->getAiApiKey();
+                    $result  = $this->callNerApi($apiUrl, $apiKey, $text);
+                    if ($result && ($result['success'] ?? false)) {
+                        $this->saveExtraction($objectId, $result['entities']);
+                    }
+                }
+                break;
+
+            case 'summarize':
+                $culture = app()->getLocale();
+                $object  = $this->getInformationObject($objectId, $culture);
+                if ($object) {
+                    $text = $this->getObjectTextForSummary($object);
+                    if (!empty(trim($text))) {
+                        $apiUrl = $this->getAiApiUrl();
+                        $apiKey = $this->getAiApiKey();
+                        try {
+                            $response = \Illuminate\Support\Facades\Http::timeout(120)
+                                ->withHeaders(['Content-Type' => 'application/json', 'X-API-Key' => $apiKey])
+                                ->post($apiUrl . '/ai/v1/summarize', ['text' => $text]);
+                            if ($response->successful()) {
+                                $summary = $response->json('summary');
+                                if ($summary) {
+                                    $this->saveScopeAndContent($objectId, $summary, $culture);
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            throw $e;
+                        }
+                    }
+                }
+                break;
+
+            case 'suggest_description':
+                $result = $this->llmService->generateSuggestion($objectId, null, null, null);
+                if (!($result['success'] ?? false)) {
+                    throw new \Exception($result['error'] ?? 'Suggestion failed');
+                }
+                break;
+
+            default:
+                throw new \Exception("Unknown task type: {$taskType}");
+        }
+    }
+
+    public function conditionAssess(Request $request) { return view('ahg-ai-services::condition-assess', ['rows' => collect()]); }
+
+    public function conditionBrowse(Request $request) { return view('ahg-ai-services::condition-browse', ['rows' => collect()]); }
+
+    public function conditionBulk(Request $request) { return view('ahg-ai-services::condition-bulk'); }
+
+    public function conditionClients(Request $request) { return view('ahg-ai-services::condition-clients', ['rows' => collect()]); }
+
+    public function conditionDashboard() { return view('ahg-ai-services::condition-dashboard', ['completedCount'=>0,'pendingCount'=>0,'criticalCount'=>0]); }
+
+    public function conditionHistory(Request $request) { return view('ahg-ai-services::condition-history', ['rows' => collect()]); }
+
+    public function conditionManualAssess(Request $request) { return view('ahg-ai-services::condition-manual-assess', ['record' => (object)[]]); }
+
+    public function conditionTraining(Request $request) { return view('ahg-ai-services::condition-training'); }
+
+    public function conditionView(int $id) { return view('ahg-ai-services::condition-view', ['record' => (object)['id'=>$id]]); }
+
+    /* ------------------------------------------------------------------ */
+    /*  HTR — Vital Records Handwritten Text Recognition                  */
+    /* ------------------------------------------------------------------ */
+
+    public function htrDashboard()
+    {
+        $health = $this->htrService->health();
+        return view('ahg-ai-services::htr.dashboard', compact('health'));
+    }
+
+    public function htrExtract()
+    {
+        return view('ahg-ai-services::htr.extract');
+    }
+
+    public function htrDoExtract(Request $request)
+    {
+        $request->validate([
+            'file'     => 'required|file|mimes:jpg,jpeg,png,tiff,tif,pdf|max:20480',
+            'doc_type' => 'nullable|string|in:auto,type_a,type_b,type_c',
+            'formats'  => 'nullable|array',
+        ]);
+
+        $file    = $request->file('file');
+        $docType = $request->input('doc_type', 'auto');
+        if ($docType === 'auto') $docType = 'type_a';
+
+        // Save uploaded image for display on results page
+        $jobId = 'htr_' . time() . '_' . mt_rand(1000, 9999);
+        $ext = $file->getClientOriginalExtension() ?: 'jpg';
+        $imgName = $jobId . '.' . $ext;
+        $imgDir = storage_path('app/private/htr-extracts');
+        if (!is_dir($imgDir)) @mkdir($imgDir, 0777, true);
+        $imgPath = $imgDir . '/' . $imgName;
+        copy($file->getRealPath(), $imgPath);
+
+        // Use local template extractor (bounding boxes from annotations)
+        $script = <<<PY
+import sys, json
+sys.path.insert(0, '/opt/ahg-ai/htr')
+from extractor import extract_and_ocr
+result = extract_and_ocr(sys.argv[1], sys.argv[2])
+print(json.dumps(result))
+PY;
+        $tmpScript = tempnam('/tmp', 'extract_') . '.py';
+        file_put_contents($tmpScript, $script);
+        $escaped = escapeshellarg($imgPath);
+        $escapedType = escapeshellarg($docType);
+        $output = shell_exec("python3 {$tmpScript} {$escaped} {$escapedType} 2>&1");
+        @unlink($tmpScript);
+
+        $results = json_decode(trim($output ?: '{}'), true);
+
+        if (!$results || !($results['success'] ?? false)) {
+            \Log::warning('HTR local extractor failed', [
+                'output' => substr($output ?? '', 0, 500),
+                'imgPath' => $imgPath,
+                'exists' => file_exists($imgPath),
+            ]);
+            // Fallback to remote service
+            $results = $this->htrService->extract($imgPath, $docType, 'all');
+            if (!$results) {
+                @unlink($imgPath);
+                return redirect()->route('admin.ai.htr.extract')
+                    ->with('error', 'HTR extraction failed. ' . ($results['error'] ?? 'Service may be offline.'));
+            }
+        }
+
+        $results['job_id'] = $jobId;
+        $results['image_name'] = $imgName;
+        $results['doc_type'] = $docType;
+
+        // Normalize bbox keys (width→w, height→h) for consistency
+        foreach ($results['fields'] ?? [] as &$field) {
+            if (isset($field['bbox'])) {
+                if (isset($field['bbox']['width']) && !isset($field['bbox']['w'])) {
+                    $field['bbox']['w'] = $field['bbox']['width'];
+                }
+                if (isset($field['bbox']['height']) && !isset($field['bbox']['h'])) {
+                    $field['bbox']['h'] = $field['bbox']['height'];
+                }
+            }
+        }
+        unset($field);
+
+        session()->put("htr_results_{$jobId}", $results);
+
+        return redirect()->route('admin.ai.htr.results', $jobId);
+    }
+
+    public function htrResults(string $jobId)
+    {
+        $results = session("htr_results_{$jobId}", []);
+        return view('ahg-ai-services::htr.results', compact('results', 'jobId'));
+    }
+
+    /**
+     * Serve an extracted image for display on results page.
+     */
+    public function htrExtractImage(string $jobId)
+    {
+        $results = session("htr_results_{$jobId}", []);
+        $imgName = $results['image_name'] ?? '';
+        $imgPath = storage_path('app/private/htr-extracts/' . $imgName);
+        if (!$imgName || !file_exists($imgPath)) {
+            abort(404);
+        }
+        return response()->file($imgPath);
+    }
+
+    public function htrDownload(string $jobId, string $fmt)
+    {
+        $response = $this->htrService->downloadOutput($jobId, $fmt);
+
+        if (!$response || !$response->successful()) {
+            return redirect()->route('admin.ai.htr.results', $jobId)
+                ->with('error', 'Download failed.');
+        }
+
+        $contentType = $response->header('Content-Type') ?? 'application/octet-stream';
+        $filename    = "htr-{$jobId}.{$fmt}";
+
+        return response($response->body(), 200)
+            ->header('Content-Type', $contentType)
+            ->header('Content-Disposition', "attachment; filename=\"{$filename}\"");
+    }
+
+    public function htrBatch()
+    {
+        return view('ahg-ai-services::htr.batch');
+    }
+
+    public function htrDoBatch(Request $request)
+    {
+        $request->validate([
+            'files'  => 'required|array|min:1',
+            'files.*' => 'file|mimes:jpg,jpeg,png,tiff,tif,pdf|max:20480',
+            'format' => 'nullable|string|in:csv,json,gedcom',
+        ]);
+
+        $paths = [];
+        foreach ($request->file('files') as $file) {
+            $tmpPath = $file->store('htr-uploads', 'local');
+            $paths[] = storage_path('app/private/' . $tmpPath);
+        }
+
+        $format = $request->input('format', 'csv');
+        $batchResults = $this->htrService->batch($paths, $format);
+
+        foreach ($paths as $p) {
+            @unlink($p);
+        }
+
+        if (!$batchResults) {
+            return redirect()->route('admin.ai.htr.batch')
+                ->with('error', 'Batch processing failed. The service may be offline.');
+        }
+
+        return view('ahg-ai-services::htr.batch', compact('batchResults'));
+    }
+
+    public function htrSources()
+    {
+        $data = $this->htrService->sources();
+
+        $sources = $data['sources'] ?? [];
+        $trainingStats = $data['training_stats'] ?? ['type_a' => 0, 'type_b' => 0, 'type_c' => 0];
+        $fsConfigured = $data['familysearch_configured'] ?? false;
+
+        // Get download jobs
+        $jobsData = $this->htrService->downloadJobs();
+        $jobs = $jobsData['jobs'] ?? [];
+
+        return view('ahg-ai-services::htr.sources', compact('sources', 'trainingStats', 'fsConfigured', 'jobs'));
+    }
+
+    public function htrSaveFsConfig(Request $request)
+    {
+        $request->validate([
+            'fs_client_id' => 'required|string|max:255',
+            'fs_username' => 'required|string|max:255',
+            'fs_password' => 'required|string|max:255',
+        ]);
+
+        // Update .env file
+        $envPath = base_path('.env');
+        $envContent = file_get_contents($envPath);
+
+        $mappings = [
+            'FAMILYSEARCH_CLIENT_ID' => $request->input('fs_client_id'),
+            'FAMILYSEARCH_USERNAME' => $request->input('fs_username'),
+            'FAMILYSEARCH_PASSWORD' => $request->input('fs_password'),
+        ];
+
+        foreach ($mappings as $key => $value) {
+            if (preg_match("/^{$key}=.*/m", $envContent)) {
+                $envContent = preg_replace("/^{$key}=.*/m", "{$key}={$value}", $envContent);
+            } else {
+                $envContent .= "\n{$key}={$value}";
+            }
+        }
+
+        file_put_contents($envPath, $envContent);
+
+        return redirect()->route('admin.ai.htr.sources')
+            ->with('success', 'FamilySearch credentials saved to .env. Restart the HTR service to apply.');
+    }
+
+    public function htrAnnotate()
+    {
+        return view('ahg-ai-services::htr.annotate');
+    }
+
+    /**
+     * Skip an image — move it to a rework/ folder for later review.
+     */
+    /**
+     * Crop OCR — recognize text in a bounding box region of an image.
+     * Used by the annotate UI for hybrid pre-fill.
+     */
+    public function htrCropOcr(Request $request)
+    {
+        $imagePath = $request->input('image_path', '');
+        $bbox = $request->input('bbox', []);
+
+        if (!$imagePath || empty($bbox)) {
+            return response()->json(['success' => false, 'error' => 'image_path and bbox required'], 400);
+        }
+
+        if (!file_exists($imagePath)) {
+            return response()->json(['success' => false, 'error' => 'Image not found'], 404);
+        }
+
+        try {
+            $htrUrl = config('services.htr.url', 'http://localhost:5006');
+            $response = \Illuminate\Support\Facades\Http::timeout(30)->post("{$htrUrl}/crop-ocr", [
+                'image_path' => $imagePath,
+                'bbox' => $bbox,
+            ]);
+
+            if ($response->successful()) {
+                return response()->json($response->json());
+            }
+
+            return response()->json(['success' => false, 'error' => 'HTR service error: ' . $response->status()], 502);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Bulk Annotate — page view.
+     */
+    public function htrBulkAnnotate()
+    {
+        return view('ahg-ai-services::htr.bulk-annotate');
+    }
+
+    /**
+     * FS Overlay Annotate — overlay field labels on document images.
+     * Cloned from bulk-annotate for overlay positioning tests.
+     */
+    public function htrFsOverlay()
+    {
+        return view('ahg-ai-services::htr.fs-overlay');
+    }
+
+    /**
+     * FS Overlay — save field positions per form type (server-side, shared across PCs).
+     */
+    public function htrFsOverlaySavePositions(Request $request)
+    {
+        $formType = $request->input('form_type', '');
+        $positions = $request->input('positions', []);
+
+        if (!$formType) {
+            return response()->json(['success' => false, 'error' => 'No form type']);
+        }
+
+        // Only save if positions actually contain field data (at least one field with x/y/w/h)
+        $hasFields = false;
+        if (is_array($positions)) {
+            foreach ($positions as $key => $val) {
+                if (is_array($val) && isset($val['x'], $val['y'], $val['w'], $val['h'])) {
+                    $hasFields = true;
+                    break;
+                }
+            }
+        }
+
+        if (!$hasFields) {
+            return response()->json(['success' => true, 'skipped' => 'no field positions to save']);
+        }
+
+        $file = storage_path('app/fs-overlay-positions.json');
+        $all = [];
+        if (file_exists($file)) {
+            $all = json_decode(file_get_contents($file), true) ?: [];
+        }
+
+        // Merge new positions into existing (don't overwrite fields that aren't in this save)
+        $existing = $all[$formType] ?? [];
+        if (is_array($existing)) {
+            $positions = array_merge($existing, $positions);
+        }
+
+        $all[$formType] = $positions;
+
+        // Also save under all related SA death form types so auto-detect
+        // inconsistency between images doesn't lose positions
+        $saDeathTypes = ['sa-death-1923', 'sa-death-1894', 'sa-death-generic'];
+        if (in_array($formType, $saDeathTypes)) {
+            foreach ($saDeathTypes as $dt) {
+                $all[$dt] = $positions;
+            }
+        }
+
+        file_put_contents($file, json_encode($all, JSON_PRETTY_PRINT | JSON_FORCE_OBJECT));
+
+        \Log::info('[FS Overlay] Saved positions', ['form_type' => $formType, 'fields' => array_keys($positions)]);
+
+        return response()->json(['success' => true, 'fields_saved' => array_keys($positions)]);
+    }
+
+    /**
+     * FS Overlay — load field positions for a form type.
+     */
+    public function htrFsOverlayLoadPositions(Request $request)
+    {
+        $formType = $request->input('form_type', '');
+
+        $file = storage_path('app/fs-overlay-positions.json');
+        $all = [];
+        if (file_exists($file)) {
+            $all = json_decode(file_get_contents($file), true) ?: [];
+        }
+
+        $positions = $all[$formType] ?? [];
+
+        // Fallback: if no positions for this form type, try other SA death types
+        if (empty($positions)) {
+            $saDeathTypes = ['sa-death-1923', 'sa-death-1894', 'sa-death-generic'];
+            if (in_array($formType, $saDeathTypes)) {
+                foreach ($saDeathTypes as $dt) {
+                    if (!empty($all[$dt])) {
+                        $positions = $all[$dt];
+                        break;
+                    }
+                }
+            }
+        }
+
+        return response()->json(['success' => true, 'positions' => $positions]);
+    }
+
+    /**
+     * Serve an auto-cropped image — removes black borders (book binding, dark edges).
+     * Scans pixel brightness from each edge to find the white form area.
+     */
+    public function htrServeCroppedImage(Request $request)
+    {
+        $path = $request->input('path', '');
+        if (!$path || !file_exists($path)) {
+            abort(404);
+        }
+
+        $cacheDir = storage_path('app/cropped-cache');
+        @mkdir($cacheDir, 0777, true);
+        $cacheKey = md5($path . filemtime($path));
+        $cachePath = "{$cacheDir}/{$cacheKey}.jpg";
+
+        if (!file_exists($cachePath)) {
+            // Load image
+            $im = @imagecreatefromjpeg($path);
+            if (!$im) {
+                $im = @imagecreatefrompng($path);
+            }
+            if (!$im) {
+                return response()->file($path); // fallback: serve original
+            }
+
+            $w = imagesx($im);
+            $h = imagesy($im);
+            $threshold = 140; // brightness threshold (0-255)
+            $samples = 20;    // more sample points for accuracy
+
+            // Helper: get brightness at a pixel (works for both grayscale and RGB)
+            $getBrightness = function($im, $x, $y) {
+                $rgb = imagecolorat($im, $x, $y);
+                $r = ($rgb >> 16) & 0xFF;
+                $g = ($rgb >> 8) & 0xFF;
+                $b = $rgb & 0xFF;
+                return (int)(($r + $g + $b) / 3); // average for RGB, same value for grayscale
+            };
+
+            // Helper: get median brightness of sample points along a line
+            $getMedian = function($values) {
+                sort($values);
+                $n = count($values);
+                return $values[(int)($n / 2)];
+            };
+
+            // Scan from left
+            $left = 0;
+            for ($x = 0; $x < $w; $x++) {
+                $bright = [];
+                for ($s = 0; $s < $samples; $s++) {
+                    $sy = (int)($h * 0.1 + ($h * 0.8 / $samples) * $s);
+                    $bright[] = $getBrightness($im, $x, min($sy, $h - 1));
+                }
+                if ($getMedian($bright) > $threshold) { $left = $x; break; }
+            }
+
+            // Scan from right
+            $right = $w - 1;
+            for ($x = $w - 1; $x > $left; $x--) {
+                $bright = [];
+                for ($s = 0; $s < $samples; $s++) {
+                    $sy = (int)($h * 0.1 + ($h * 0.8 / $samples) * $s);
+                    $bright[] = $getBrightness($im, $x, min($sy, $h - 1));
+                }
+                if ($getMedian($bright) > $threshold) { $right = $x; break; }
+            }
+
+            // Scan from top (sample from the middle of the detected width)
+            $midLeft = $left + (int)(($right - $left) * 0.2);
+            $midRight = $left + (int)(($right - $left) * 0.8);
+            $top = 0;
+            for ($y = 0; $y < $h; $y++) {
+                $bright = [];
+                for ($s = 0; $s < $samples; $s++) {
+                    $sx = (int)($midLeft + ($midRight - $midLeft) / $samples * $s);
+                    $bright[] = $getBrightness($im, min($sx, $w - 1), $y);
+                }
+                if ($getMedian($bright) > $threshold) { $top = $y; break; }
+            }
+
+            // Scan from bottom
+            $bottom = $h - 1;
+            for ($y = $h - 1; $y > $top; $y--) {
+                $bright = [];
+                for ($s = 0; $s < $samples; $s++) {
+                    $sx = (int)($midLeft + ($midRight - $midLeft) / $samples * $s);
+                    $bright[] = $getBrightness($im, min($sx, $w - 1), $y);
+                }
+                if ($getMedian($bright) > $threshold) { $bottom = $y; break; }
+            }
+
+            // Detect overlay card: scan for a vertical dark gap in the right 50%
+            // Marriage registers etc. have a white checklist card overlapping on the right
+            // The gap between document and card is a dark vertical band
+            $midX = $left + (int)(($right - $left) * 0.5);
+            $gapThreshold = 80; // darker than content
+            $gapMinHeight = (int)(($bottom - $top) * 0.3); // gap must span at least 30% of height
+
+            for ($x = $right; $x > $midX; $x--) {
+                $darkCount = 0;
+                for ($s = 0; $s < $samples; $s++) {
+                    $sy = (int)($top + ($bottom - $top) * 0.1 + ($bottom - $top) * 0.8 / $samples * $s);
+                    $b = $getBrightness($im, min($x, $w - 1), min($sy, $h - 1));
+                    if ($b < $gapThreshold) $darkCount++;
+                }
+                // If most sample points are dark, this is a gap column
+                if ($darkCount >= $samples * 0.6) {
+                    // Verify there's bright content to the left of this gap
+                    $leftOfGap = [];
+                    $checkX = max($left, $x - 20);
+                    for ($s = 0; $s < $samples; $s++) {
+                        $sy = (int)($top + ($bottom - $top) * 0.1 + ($bottom - $top) * 0.8 / $samples * $s);
+                        $leftOfGap[] = $getBrightness($im, min($checkX, $w - 1), min($sy, $h - 1));
+                    }
+                    if ($getMedian($leftOfGap) > $threshold) {
+                        // Found the gap — crop here
+                        $right = $x;
+                        break;
+                    }
+                }
+            }
+
+            // Add small padding
+            $pad = 5;
+            $left = max(0, $left - $pad);
+            $top = max(0, $top - $pad);
+            $right = min($w - 1, $right + $pad);
+            $bottom = min($h - 1, $bottom + $pad);
+
+            $cropW = $right - $left;
+            $cropH = $bottom - $top;
+
+            // Only crop if we're actually removing significant borders (> 5% per side)
+            // Guard against INT_MAX overflow: imagecrop fails when width * height exceeds 2^31-1
+            if ($cropW > $w * 0.5 && $cropH > $h * 0.5 && ((float)$cropW * (float)$cropH) < 2147483647) {
+                $cropped = imagecrop($im, ['x' => $left, 'y' => $top, 'width' => $cropW, 'height' => $cropH]);
+                if ($cropped) {
+                    imagejpeg($cropped, $cachePath, 92);
+                    imagedestroy($cropped);
+                } else {
+                    imagejpeg($im, $cachePath, 92);
+                }
+            } else {
+                imagejpeg($im, $cachePath, 92);
+            }
+            imagedestroy($im);
+        }
+
+        return response()->file($cachePath, ['Content-Type' => 'image/jpeg']);
+    }
+
+    /**
+     * FS Overlay — manual crop: user draws a rectangle, server crops and replaces the cached image.
+     */
+    public function htrFsOverlayManualCrop(Request $request)
+    {
+        // Handle skip → move to rework folder
+        if ($request->input('action') === 'skip') {
+            $imagePath = $request->input('image_path', '');
+            $folder = $request->input('folder', '');
+            if (!$folder) $folder = dirname($imagePath);
+            if ($imagePath && file_exists($imagePath)) {
+                $reworkDir = $folder . '/rework';
+                @mkdir($reworkDir, 0777, true);
+                @rename($imagePath, $reworkDir . '/' . basename($imagePath));
+            }
+            return response()->json(['success' => true]);
+        }
+
+        $imagePath = $request->input('image_path', '');
+        $x = (int)$request->input('x', 0);
+        $y = (int)$request->input('y', 0);
+        $w = (int)$request->input('w', 0);
+        $h = (int)$request->input('h', 0);
+
+        if (!$imagePath || !file_exists($imagePath)) {
+            return response()->json(['success' => false, 'error' => 'Image not found']);
+        }
+        if ($w < 50 || $h < 50) {
+            return response()->json(['success' => false, 'error' => 'Crop area too small']);
+        }
+
+        // Use the auto-cropped version if it exists (that's what the viewer shows)
+        $cacheDir = storage_path('app/cropped-cache');
+        @mkdir($cacheDir, 0777, true);
+        $oldCacheKey = md5($imagePath . filemtime($imagePath));
+        $oldCachePath = "{$cacheDir}/{$oldCacheKey}.jpg";
+        $srcPath = file_exists($oldCachePath) ? $oldCachePath : $imagePath;
+
+        $im = @imagecreatefromjpeg($srcPath) ?: @imagecreatefrompng($srcPath);
+        if (!$im) {
+            return response()->json(['success' => false, 'error' => 'Cannot load image']);
+        }
+
+        // Guard against INT_MAX overflow: imagecrop fails when width * height exceeds 2^31-1
+        if (((float)$w * (float)$h) >= 2147483647) {
+            imagedestroy($im);
+            return response()->json(['success' => false, 'error' => 'Crop area too large (exceeds INT_MAX)']);
+        }
+
+        $crop = imagecrop($im, ['x' => $x, 'y' => $y, 'width' => $w, 'height' => $h]);
+        imagedestroy($im);
+
+        if (!$crop) {
+            return response()->json(['success' => false, 'error' => 'Crop failed']);
+        }
+
+        // Overwrite the original file with cropped version
+        imagejpeg($crop, $imagePath, 92);
+
+        // Clear old cache, write new cache with updated mtime
+        @unlink($oldCachePath);
+        $newCacheKey = md5($imagePath . filemtime($imagePath));
+        $newCachePath = "{$cacheDir}/{$newCacheKey}.jpg";
+        imagejpeg($crop, $newCachePath, 92);
+        imagedestroy($crop);
+
+        $newInfo = @getimagesize($imagePath);
+
+        return response()->json([
+            'success' => true,
+            'width' => $newInfo[0] ?? $w,
+            'height' => $newInfo[1] ?? $h,
+        ]);
+    }
+
+    /**
+     * FS Overlay — recognise text in annotated field regions using the fine-tuned HTR model.
+     * Crops each field from the image, sends to HTR service, returns recognised text.
+     */
+    public function htrFsOverlayRecognise(Request $request)
+    {
+        $imagePath = $request->input('image_path', '');
+        $annotations = $request->input('annotations', []); // [{label, x, y, w, h}, ...]
+
+        if (!$imagePath || !file_exists($imagePath)) {
+            return response()->json(['success' => false, 'error' => 'Image not found']);
+        }
+
+        if (empty($annotations)) {
+            return response()->json(['success' => false, 'error' => 'No annotations to recognise']);
+        }
+
+        // Load the image (use cropped version if available)
+        $cacheDir = storage_path('app/cropped-cache');
+        $cacheKey = md5($imagePath . filemtime($imagePath));
+        $cachePath = "{$cacheDir}/{$cacheKey}.jpg";
+        $srcPath = file_exists($cachePath) ? $cachePath : $imagePath;
+
+        $im = @imagecreatefromjpeg($srcPath) ?: @imagecreatefrompng($srcPath);
+        if (!$im) {
+            return response()->json(['success' => false, 'error' => 'Cannot load image']);
+        }
+
+        $results = [];
+        $htrUrl = 'http://192.168.0.115:5006/ocr-finetuned';
+
+        foreach ($annotations as $ann) {
+            $label = $ann['label'] ?? '';
+            $x = max(0, (int)($ann['x'] ?? 0));
+            $y = max(0, (int)($ann['y'] ?? 0));
+            $w = max(1, (int)($ann['w'] ?? 1));
+            $h = max(1, (int)($ann['h'] ?? 1));
+
+            // Crop the field region
+            $crop = imagecrop($im, ['x' => $x, 'y' => $y, 'width' => $w, 'height' => $h]);
+            if (!$crop) {
+                $results[$label] = ['text' => '', 'error' => 'Crop failed'];
+                continue;
+            }
+
+            // Save crop to temp file
+            $tmpFile = tempnam(sys_get_temp_dir(), 'htr_') . '.jpg';
+            imagejpeg($crop, $tmpFile, 95);
+            imagedestroy($crop);
+
+            // Send to HTR service
+            try {
+                $ch = curl_init($htrUrl);
+                $cFile = new \CURLFile($tmpFile, 'image/jpeg', 'crop.jpg');
+                curl_setopt_array($ch, [
+                    CURLOPT_POST => true,
+                    CURLOPT_POSTFIELDS => ['file' => $cFile],
+                    CURLOPT_RETURNTRANSFER => true,
+                    CURLOPT_TIMEOUT => 30,
+                ]);
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
+
+                if ($httpCode === 200) {
+                    $data = json_decode($response, true);
+                    $text = $data['text'] ?? $data['result'] ?? '';
+                    $results[$label] = ['text' => trim($text)];
+                } else {
+                    $results[$label] = ['text' => '', 'error' => "HTR returned {$httpCode}"];
+                }
+            } catch (\Exception $e) {
+                $results[$label] = ['text' => '', 'error' => $e->getMessage()];
+            }
+
+            @unlink($tmpFile);
+        }
+
+        imagedestroy($im);
+
+        // Post-process: match place fields against SA towns list
+        $placeFields = ['Place of Marriage', 'District', 'Province'];
+        $needsPlaceLookup = false;
+        foreach ($results as $label => $r) {
+            if (in_array($label, $placeFields) && !empty($r['text'])) {
+                $needsPlaceLookup = true;
+                break;
+            }
+        }
+
+        if ($needsPlaceLookup) {
+            try {
+                $plScript = <<<'PY'
+import sys, json
+sys.path.insert(0, '/opt/ahg-ai/htr')
+from places import PlaceLookup
+pl = PlaceLookup()
+queries = json.loads(sys.argv[1])
+out = {}
+for label, text in queries.items():
+    match = pl.lookup(text, threshold=0.65)
+    if match:
+        # Reject if match adds words not in the input (e.g. "Cape" → "Cape Division")
+        input_words = set(text.lower().split())
+        match_words = set(match['name'].lower().split())
+        added_words = match_words - input_words
+        if added_words and match.get('match_type') != 'exact':
+            # Match adds words — only accept if very high confidence
+            if match.get('confidence', 0) < 0.85:
+                out[label] = None
+                continue
+        # Reject if match name is much longer than input (prevents "Cape" → "Cape Division")
+        if len(match['name']) > len(text) * 1.8 and match.get('match_type') != 'exact':
+            out[label] = None
+            continue
+        out[label] = match
+    else:
+        out[label] = None
+print(json.dumps(out))
+PY;
+                $queries = [];
+                foreach ($results as $label => $r) {
+                    if (in_array($label, $placeFields) && !empty($r['text'])) {
+                        $queries[$label] = $r['text'];
+                    }
+                }
+
+                if (!empty($queries)) {
+                    $tmpPy = tempnam(sys_get_temp_dir(), 'place_') . '.py';
+                    file_put_contents($tmpPy, $plScript);
+                    $escaped = escapeshellarg(json_encode($queries));
+                    $output = shell_exec("python3 {$tmpPy} {$escaped} 2>/dev/null");
+                    @unlink($tmpPy);
+
+                    $matches = json_decode(trim($output ?: '{}'), true) ?: [];
+                    // Only attach match info as metadata — never overwrite the raw OCR text
+                    // This data is for LLM training, so the original text must be preserved
+                    foreach ($matches as $label => $match) {
+                        if ($match && isset($results[$label])) {
+                            $results[$label]['place_match'] = $match;
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                \Log::warning('[FS Overlay] Place lookup failed: ' . $e->getMessage());
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'results' => $results,
+        ]);
+    }
+
+    /**
+     * FS Overlay — OCR the form labels to find their positions on the image.
+     * Runs Tesseract with TSV output, matches words against field names.
+     */
+    public function htrFsOverlayOcr(Request $request)
+    {
+        $imagePath = $request->input('image_path', '');
+        $fields = $request->input('fields', []); // field names to locate
+
+        if (!$imagePath || !file_exists($imagePath)) {
+            return response()->json(['success' => false, 'error' => 'Image not found']);
+        }
+
+        // Use cropped image if available
+        $cacheDir = storage_path('app/cropped-cache');
+        $cacheKey = md5($imagePath . filemtime($imagePath));
+        $cachePath = "{$cacheDir}/{$cacheKey}.jpg";
+        $ocrPath = file_exists($cachePath) ? $cachePath : $imagePath;
+
+        // Run Tesseract with TSV output (word-level bounding boxes)
+        $tmpOut = tempnam(sys_get_temp_dir(), 'ocr');
+        $cmd = sprintf(
+            'tesseract %s %s --psm 3 tsv 2>/dev/null',
+            escapeshellarg($ocrPath),
+            escapeshellarg($tmpOut)
+        );
+        exec($cmd);
+
+        $tsvFile = $tmpOut . '.tsv';
+        if (!file_exists($tsvFile)) {
+            @unlink($tmpOut);
+            return response()->json(['success' => false, 'error' => 'OCR failed']);
+        }
+
+        $lines = file($tsvFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        @unlink($tsvFile);
+        @unlink($tmpOut);
+
+        // Parse TSV into word entries
+        $words = [];
+        foreach ($lines as $i => $line) {
+            if ($i === 0) continue; // header
+            $parts = explode("\t", $line);
+            if (count($parts) < 12 || empty(trim($parts[11]))) continue;
+            $conf = (float)$parts[10];
+            if ($conf < 15) continue; // low threshold — rely on left-side scoring to prefer printed labels over handwriting
+            $words[] = [
+                'text' => trim($parts[11]),
+                'left' => (int)$parts[6],
+                'top' => (int)$parts[7],
+                'width' => (int)$parts[8],
+                'height' => (int)$parts[9],
+                'conf' => $conf,
+            ];
+        }
+
+        // Fields to skip entirely — not useful for annotation
+        $skipFields = ['Event Type', 'Birth Year', 'Relationship to Head of Household', 'Occupation', 'Cause of Death'];
+
+        // Build a map of field label keywords → positions
+        // For each CSV field name, find the matching printed label on the form
+        // Bilingual SA death certificate labels (English / Afrikaans)
+        // Multi-word phrases are matched by finding adjacent words on the same line
+        $labelMap = [
+            'Name' => [
+                'phrases' => ['christian names and surname', 'christian names & surname', 'voornamen en familienaam', 'surname of deceased', 'naam van oorledene', 'name and surname', 'naam en van'],
+                'words' => ['surname', 'familienaam'],
+                'context' => ['christian', 'names', 'voornamen', 'deceased', 'oorledene'],
+                'min_y_pct' => 0.15,
+                'max_y_pct' => 0.35,
+            ],
+            'Sex' => [
+                'phrases' => ['sex or gender', 'geslag of gender'],
+                'words' => ['sex', 'geslacht', 'geslag', 'gender', 'gee'],
+                'numbered_label' => '2',
+                'min_y_pct' => 0.20,
+                'max_y_pct' => 0.35,
+            ],
+            'Age' => [
+                'phrases' => ['age at death', 'ouderdom by oorlye', 'age last birthday', 'ouderdom laaste verjaarsdag'],
+                'words' => ['age', 'ouderdom', 'leeftyd'],
+                'context' => ['death', 'dood', 'oorlye', 'birthday', 'verjaarsdag', 'last'],
+                'numbered_label' => '4',
+                'min_y_pct' => 0.25,
+                'max_y_pct' => 0.40,
+            ],
+            'Birth Date' => [
+                'phrases' => ['date of birth', 'geboortedatum'],
+                'words' => ['birth', 'born', 'geboorte'],
+            ],
+            'Birth Place' => [
+                'phrases' => ['place of birth', 'geboorteplek'],
+                'words' => ['birthplace', 'geboorteplek'],
+            ],
+            'Event Date' => [
+                'phrases' => ['date of death', 'datum van oorlye', 'datum van dood', 'datum van sterfte', 'datum van overlijden', 'date of decease', 'date when death'],
+                'words' => ['date'],
+                'context' => ['of', 'death', 'dood', 'oorlye'],
+                'numbered_label' => '8',
+                'min_y_pct' => 0.30,
+                'max_y_pct' => 0.50,
+            ],
+            'Event Year' => [
+                // The printed "18__" / "19__" / "20__" year box — far right on the Date of Death line
+                'phrases' => [],
+                'words' => ['18', '19', '20'],
+                'min_x_pct' => 0.60,
+                'min_y_pct' => 0.30,
+                'max_y_pct' => 0.50,
+            ],
+            'Residence Place' => [
+                // Item 11a on the 1894 form: "Duration of last Illness"
+                // OCR often misses "of" and "last" — add short phrases
+                'phrases' => ['duration of last illness', 'duration of last', 'duration illness', 'duration of illness', 'duur van laaste siekte', 'duur van laatste ziekte', 'duur van siekte'],
+                'words' => ['duration', 'duur'],
+                'context' => ['illness', 'siekte', 'last', 'laaste'],
+                'numbered_label' => '114', // OCR reads "11a." as "114."
+                'min_y_pct' => 0.40,
+                'max_y_pct' => 0.60,
+            ],
+            'Cause of Death' => [
+                'phrases' => ['cause of death', 'oorsaak van dood', 'doodsoorsaak'],
+                'words' => ['cause', 'causes', 'oorsaak', 'doodsoorsaak'],
+            ],
+            'Father' => [
+                'phrases' => ['father of deceased', 'vader van oorledene'],
+                'words' => ['father', 'vader'],
+            ],
+            'Mother' => [
+                'phrases' => ['mother of deceased', 'moeder van oorledene', 'maiden name'],
+                'words' => ['mother', 'moeder', 'maiden'],
+            ],
+            'Spouse' => [
+                'phrases' => [],
+                'words' => ['spouse', 'married', 'husband', 'wife', 'eggenoot', 'eggenote', 'getroud'],
+            ],
+            'Occupation' => [
+                'phrases' => [],
+                'words' => ['occupation', 'profession', 'beroep'],
+            ],
+            'Race' => [
+                'phrases' => [],
+                'words' => ['race', 'colour', 'color', 'ras', 'kleur'],
+            ],
+            'Marital Status' => [
+                'phrases' => ['marital status', 'huwelikstaat'],
+                'words' => ['married', 'marital', 'single', 'widow', 'huwelikstaat'],
+            ],
+            'Residence' => [
+                'phrases' => ['usual place of residence', 'gewone woonplek', 'usual place of abode'],
+                'words' => ['residence', 'address', 'abode', 'woonplek', 'adres'],
+            ],
+            'District' => [
+                'phrases' => [],
+                'words' => ['district', 'division', 'distrik', 'afdeling'],
+            ],
+            'Registration No' => [
+                'phrases' => ['registration no', 'registrasienommer'],
+                'words' => ['registration', 'register', 'entry', 'registrasie'],
+            ],
+            'Informant' => [
+                'phrases' => [],
+                'words' => ['informant', 'informants', 'aangewer'],
+            ],
+            'Registrar' => [
+                'phrases' => [],
+                'words' => ['registrar', 'registrateur'],
+            ],
+        ];
+
+        // Get image dimensions — use CROPPED image if available (OCR runs on cropped)
+        $cacheDir = storage_path('app/cropped-cache');
+        $cacheKey = md5($imagePath . @filemtime($imagePath));
+        $croppedPath = "{$cacheDir}/{$cacheKey}.jpg";
+        $dimPath = file_exists($croppedPath) ? $croppedPath : $imagePath;
+        $imgInfo = @getimagesize($dimPath);
+        $imgWidth = $imgInfo ? $imgInfo[0] : 1800;
+        $imgHeight = $imgInfo ? $imgInfo[1] : 2400;
+
+        // Build full-text lines from adjacent words (same Y ±25px) for phrase matching
+        // Widened from 15px to handle slightly uneven OCR bounding boxes on old forms
+        $lines = [];
+        $sortedWords = $words;
+        usort($sortedWords, fn($a, $b) => $a['top'] === $b['top'] ? $a['left'] - $b['left'] : $a['top'] - $b['top']);
+        $currentLine = [];
+        $currentY = -100;
+        foreach ($sortedWords as $w) {
+            if (abs($w['top'] - $currentY) > 25) {
+                if (!empty($currentLine)) $lines[] = $currentLine;
+                $currentLine = [$w];
+                $currentY = $w['top'];
+            } else {
+                $currentLine[] = $w;
+            }
+        }
+        if (!empty($currentLine)) $lines[] = $currentLine;
+
+        $positions = [];
+        foreach ($fields as $fieldName) {
+            // Skip excluded fields
+            if (in_array($fieldName, $skipFields)) continue;
+
+            $config = $labelMap[$fieldName] ?? ['phrases' => [], 'words' => [strtolower($fieldName)]];
+            $phrases = $config['phrases'] ?? [];
+            $keywords = $config['words'] ?? [];
+            $contextWords = $config['context'] ?? [];
+            $bestMatch = null;
+            $bestConf = 0;
+
+            // Read Y filters early for all strategies
+            $maxYPctVal = $config['max_y_pct'] ?? 1.0;
+            $minYPctVal = $config['min_y_pct'] ?? 0.0;
+
+            // Strategy 1: Multi-word phrase matching (most accurate)
+            // Find lines where the full phrase appears
+            foreach ($phrases as $phrase) {
+                $phraseWords = explode(' ', strtolower($phrase));
+                foreach ($lines as $line) {
+                    $lineText = strtolower(implode(' ', array_column($line, 'text')));
+                    if (stripos($lineText, $phrase) !== false) {
+                        // Find the first word of the phrase in this line
+                        foreach ($line as $w) {
+                            // Y-position filter — skip header and fine print
+                            if ($imgHeight > 0 && $w['top'] > $imgHeight * $maxYPctVal) continue;
+                            if ($imgHeight > 0 && $w['top'] < $imgHeight * $minYPctVal) continue;
+                            // Left-side preference — labels are on the left half
+                            if ($imgWidth > 0 && $w['left'] > $imgWidth * 0.55) continue;
+                            if (stripos(strtolower($w['text']), $phraseWords[0]) !== false) {
+                                // Compute bounding box spanning all phrase words
+                                $phraseRight = $w['left'] + $w['width'];
+                                $phraseBottom = $w['top'] + $w['height'];
+                                foreach ($line as $lw) {
+                                    if ($lw['left'] >= $w['left'] && $lw['left'] <= $w['left'] + $imgWidth * 0.3) {
+                                        $lwLower = strtolower($lw['text']);
+                                        foreach ($phraseWords as $pw) {
+                                            if (stripos($lwLower, $pw) !== false) {
+                                                $phraseRight = max($phraseRight, $lw['left'] + $lw['width']);
+                                                $phraseBottom = max($phraseBottom, $lw['top'] + $lw['height']);
+                                            }
+                                        }
+                                    }
+                                }
+                                $score = 1000 + $w['conf'];
+                                // Prefer matches higher on the page (form body, not fine print)
+                                // Add bonus for being closer to top of valid Y-band
+                                if ($imgHeight > 0) {
+                                    $yPct = $w['top'] / $imgHeight;
+                                    $score += (int)((1.0 - $yPct) * 200); // higher = better
+                                }
+                                if ($score > $bestConf) {
+                                    $bestMatch = [
+                                        'text' => $phrase,
+                                        'left' => $w['left'],
+                                        'top' => $w['top'],
+                                        'width' => $phraseRight - $w['left'],
+                                        'height' => $phraseBottom - $w['top'],
+                                        'conf' => $w['conf'],
+                                    ];
+                                    $bestConf = $score;
+                                }
+                                break; // found phrase in this line, try next line/phrase for better match
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Strategy 1.5: Numbered label — find "8." or "12." near a keyword
+            // SA death certificates have numbered fields: "8. Date of Death", "12. Duration of last Illness"
+            $numberedLabel = $config['numbered_label'] ?? null;
+            $maxYPct = $maxYPctVal;
+            $minYPct = $minYPctVal;
+            $minXPctField = $config['min_x_pct'] ?? 0.0;
+            if (!$bestMatch && $numberedLabel) {
+                foreach ($words as $word) {
+                    // Look for the number label — flexible matching
+                    $wClean = rtrim(rtrim($word['text'], '.'), ':');
+                    // Strip trailing quote marks too (OCR artifact: '2."')
+                    $wClean = rtrim($wClean, '"\'');
+                    $nlClean = strtolower($numberedLabel);
+                    $wLower = strtolower($wClean);
+                    $matches = ($wLower === $nlClean)
+                        || ($wLower === str_replace('a', '4', $nlClean))
+                        || ($wLower === str_replace('4', 'a', $nlClean));
+                    if (!$matches) continue;
+                    // Skip if outside valid Y range (header or fine print)
+                    if ($imgHeight > 0 && $word['top'] > $imgHeight * $maxYPct) continue;
+                    if ($imgHeight > 0 && $word['top'] < $imgHeight * $minYPct) continue;
+                    // Found the number — the answer region is to its right on the same line
+                    // Find the rightmost keyword on this line to get the full label span
+                    $labelEnd = $word['left'] + $word['width'];
+                    foreach ($words as $other) {
+                        if (abs($other['top'] - $word['top']) > 20) continue;
+                        if ($other['left'] <= $word['left']) continue;
+                        $labelEnd = max($labelEnd, $other['left'] + $other['width']);
+                        // Stop scanning after 500px — don't include handwritten answer
+                        if ($other['left'] - $word['left'] > 500) break;
+                    }
+                    $bestMatch = [
+                        'text' => $numberedLabel . '. ' . $fieldName,
+                        'left' => $word['left'],
+                        'top' => $word['top'],
+                        'width' => min($labelEnd - $word['left'], 20 * 10), // cap at 20mm
+                        'height' => $word['height'],
+                        'conf' => $word['conf'],
+                    ];
+                    $bestConf = 800; // between phrase (1000) and keyword+context (500)
+                    break;
+                }
+            }
+
+            // Strategy 2: Single keyword + context (e.g. "date" near "death")
+            if (!$bestMatch && !empty($contextWords)) {
+                foreach ($words as $word) {
+                    if ($word['width'] < 15 || $word['height'] < 8 || strlen($word['text']) < 3) continue;
+                    if ($imgHeight > 0 && $word['top'] > $imgHeight * $maxYPct) continue;
+                    if ($imgHeight > 0 && $word['top'] < $imgHeight * $minYPct) continue;
+                    $wLower = strtolower($word['text']);
+                    $kwMatch = false;
+                    foreach ($keywords as $kw) {
+                        if (stripos($wLower, $kw) !== false) { $kwMatch = true; break; }
+                    }
+                    if (!$kwMatch) continue;
+
+                    // Check if any context word is nearby (within 30px vertically, 500px horizontally)
+                    $hasContext = false;
+                    foreach ($words as $other) {
+                        if (abs($other['top'] - $word['top']) > 30) continue;
+                        if (abs($other['left'] - $word['left']) > 500) continue;
+                        $oLower = strtolower($other['text']);
+                        foreach ($contextWords as $ctx) {
+                            if (stripos($oLower, $ctx) !== false) { $hasContext = true; break 2; }
+                        }
+                    }
+
+                    if ($hasContext) {
+                        $score = 500 + $word['conf'] + ($word['width'] * 0.1);
+                        // Prefer labels on left side of page (printed labels are left-aligned)
+                        if ($imgWidth > 0 && $word['left'] < $imgWidth * 0.40) $score += 100;
+                        if ($score > $bestConf) {
+                            $bestMatch = $word;
+                            $bestConf = $score;
+                        }
+                    }
+                }
+            }
+
+            // Strategy 3: Simple single keyword (fallback)
+            $minXPct = $config['min_x_pct'] ?? 0.0;
+            if (!$bestMatch) {
+                foreach ($words as $word) {
+                    $minLen = (strlen($word['text']) <= 2 && in_array($word['text'], ['18', '19', '20'])) ? 2 : 3;
+                    if ($word['width'] < 15 || $word['height'] < 8 || strlen($word['text']) < $minLen) continue;
+                    if ($imgHeight > 0 && $word['top'] > $imgHeight * $maxYPct) continue;
+                    if ($imgHeight > 0 && $word['top'] < $imgHeight * $minYPct) continue;
+                    if ($imgWidth > 0 && $minXPctField > 0 && $word['left'] < $imgWidth * $minXPctField) continue;
+                    $wLower = strtolower($word['text']);
+                    foreach ($keywords as $kw) {
+                        if (stripos($wLower, $kw) !== false || (strlen($kw) > 3 && stripos($kw, $wLower) !== false) || $wLower === $kw) {
+                            $score = $word['conf'] + ($word['width'] * 0.1);
+                            // Prefer left side (printed labels) over right side (handwriting)
+                            if ($imgWidth > 0 && $word['left'] < $imgWidth * 0.40) $score += 100;
+                            if ($score > $bestConf) {
+                                $bestMatch = $word;
+                                $bestConf = $score;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if ($bestMatch) {
+                // Answer region: to the right of and slightly below the label
+                $labelRight = $bestMatch['left'] + $bestMatch['width'];
+                $startX = $labelRight + 5;
+                $startY = $bestMatch['top'] - 5;
+
+                // Default box: from label end to ~85% of image width
+                $boxW = max(250, (int)($imgWidth * 0.85) - $startX);
+                $boxH = max(45, $bestMatch['height'] + 25);
+
+                // 1mm ≈ 10px on these ~250 DPI scans
+                $mm = 10;
+
+                // Fixed box sizes per field (all in mm)
+                // All boxes start right after label end + small gap
+                // 1mm ≈ 10px on these ~250 DPI scans
+                $mm = 10;
+                $gap = 1 * $mm; // 1mm gap after label
+
+                // Box starts right after the label text ends
+                // Label width = just the matched word, not extended
+                // Cap label width — for display only, keep it tight to the actual word
+                $bestMatch['width'] = min($bestMatch['width'], 10 * $mm); // cap at 10mm
+
+                if ($fieldName === 'Name') {
+                    $startX = $bestMatch['left'] + $bestMatch['width'] + $gap;
+                    $startY = $bestMatch['top'] - (4 * $mm);  // up 1mm
+                    $boxW = 90 * $mm;
+                    $boxH = 8 * $mm;
+                }
+
+                if ($fieldName === 'Sex') {
+                    $startX = $bestMatch['left'] + $bestMatch['width'] + $gap;
+                    $startY = $bestMatch['top'] - (4 * $mm);
+                    $boxW = 120 * $mm;  // +30mm
+                    $boxH = 7 * $mm;
+                }
+
+                if ($fieldName === 'Age') {
+                    $startX = $bestMatch['left'] + $bestMatch['width'] + $gap - (30 * $mm);  // left 30mm
+                    $startY = $bestMatch['top'] - (11 * $mm);  // up 10mm
+                    $boxW = 40 * $mm;
+                    $boxH = 7 * $mm;
+                }
+
+                if ($fieldName === 'Event Date') {
+                    $startX = $bestMatch['left'] + $bestMatch['width'] + $gap + (5 * $mm);
+                    $startY = $bestMatch['top'] - (5 * $mm);  // up 2mm
+                    $boxW = 110 * $mm;  // +10mm
+                    $boxH = 8 * $mm;
+                }
+
+                if ($fieldName === 'Event Year') {
+                    $startX = $bestMatch['left'] + $bestMatch['width'] + $gap;
+                    $startY = $bestMatch['top'] - (1 * $mm);
+                    $boxW = 12 * $mm;
+                    $boxH = 4 * $mm;
+                }
+
+                if ($fieldName === 'Residence Place') {
+                    $startX = $bestMatch['left'] + $bestMatch['width'] + $gap + (25 * $mm);  // left 5mm (was 30)
+                    $startY = $bestMatch['top'] - (3 * $mm);  // up 2mm
+                    $boxW = 80 * $mm;
+                    $boxH = 7 * $mm;
+                }
+
+                // If the answer area would be too narrow (label is far right), put box below label instead
+                if ($boxW < 100) {
+                    $startX = $bestMatch['left'];
+                    $startY = $bestMatch['top'] + $bestMatch['height'] + 3;
+                    $boxW = max(250, (int)($imgWidth * 0.85) - $startX);
+                }
+
+                $positions[$fieldName] = [
+                    'label_text' => $bestMatch['text'],
+                    'label_x' => $bestMatch['left'],
+                    'label_y' => $bestMatch['top'],
+                    'label_w' => $bestMatch['width'],
+                    'label_h' => $bestMatch['height'],
+                    'x' => $startX,
+                    'y' => $startY,
+                    'w' => $boxW,
+                    'h' => $boxH,
+                    'match_strategy' => $bestConf >= 1000 ? 'phrase' : ($bestConf >= 500 ? 'keyword+context' : 'keyword'),
+                ];
+            }
+        }
+
+        // ── Age special case: if Sex was found, position Age relative to Sex ──
+        // Age label is often missed by OCR. Sex is more reliable.
+        // On the form, Age is ~19mm below Sex at the same X.
+        $mm = 10;
+        $gap = 1 * $mm;
+        if (isset($positions['Sex']) && $positions['Sex']['match_strategy'] !== 'relative') {
+            $sexPos = $positions['Sex'];
+            $ageFromSex = true;
+            // If Age was found but at a wrong position, override it
+            // If Age was not found, create it
+            $positions['Age'] = [
+                'label_text' => 'Age (from Sex)',
+                'label_x' => $sexPos['label_x'],
+                'label_y' => $sexPos['label_y'] + (15 * $mm),
+                'label_w' => $sexPos['label_w'],
+                'label_h' => $sexPos['label_h'],
+                'x' => $sexPos['x'],
+                'y' => $sexPos['y'] + (15 * $mm),  // down 1mm
+                'w' => 120 * $mm,  // +30mm wider
+                'h' => 7 * $mm,
+                'match_strategy' => 'from_sex',
+            ];
+        }
+
+        // ── Relative positioning: for fields not found by OCR, compute from a found anchor ──
+        // On the 1894 SA death form, fields are at fixed vertical offsets from each other.
+        // Offsets measured as % of image height from "1. Christian Names and Surname"
+        // Calibrated from 33S7-95DB-9JD1.jpg (2119x3040, Act 7 of 1894)
+        // 1mm ≈ 10px on these scans
+        $mmRel = 10;
+        $relativeOffsets = [
+            // field => [y_offset_from_name (% of imgH), x_start (% of imgW), w (mm), h (mm)]
+            'Name'            => [0.000, 0.50, 90, 10],
+            'Sex'             => [0.036, 0.33, 50, 5],
+            'Age'             => [0.100, 0.33, 40, 5],
+            'Event Date'      => [0.183, 0.38, 90, 6],
+            'Event Year'      => [0.183, 0.82, 12, 4],
+            'Residence Place' => [0.284, 0.42, 80, 5],
+        ];
+
+        // Find best anchor: prefer Name, then any found field
+        $anchorY = null;
+        $anchorField = null;
+        foreach (['Name', 'Sex', 'Age', 'Event Date', 'Residence Place'] as $af) {
+            if (isset($positions[$af])) {
+                $anchorY = $positions[$af]['label_y'];
+                $anchorField = $af;
+                break;
+            }
+        }
+
+        if ($anchorY !== null) {
+            // Compute the Name label Y from the anchor
+            $nameY = $anchorY - (int)($imgHeight * $relativeOffsets[$anchorField][0]);
+
+            foreach ($relativeOffsets as $fn => $offsets) {
+                if (isset($positions[$fn])) continue; // already found by OCR
+                if (!in_array($fn, $fields)) continue; // not requested
+
+                $estY = $nameY + (int)($imgHeight * $offsets[0]);
+                $estX = (int)($imgWidth * $offsets[1]);
+                $estW = $offsets[2] * $mmRel;
+                $estH = $offsets[3] * $mmRel;
+
+                $positions[$fn] = [
+                    'label_text' => $fn . ' (relative)',
+                    'label_x' => (int)($imgWidth * 0.28),
+                    'label_y' => $estY,
+                    'label_w' => (int)($imgWidth * 0.06),
+                    'label_h' => 20,
+                    'x' => $estX,
+                    'y' => $estY - 5,
+                    'w' => $estW,
+                    'h' => $estH,
+                    'match_strategy' => 'relative',
+                ];
+            }
+        }
+
+        // Return word texts for form type detection
+        $wordTexts = array_column($words, 'text');
+
+        // Find anchor text position (the form title)
+        // Look for key title words and compute the bounding box spanning all of them
+        $anchorKeywords = ['death', 'act', 'informasievorm', 'sterfgeval', 'kennisgewing', 'wet'];
+        $anchorWords = [];
+        foreach ($words as $word) {
+            $wLower = strtolower($word['text']);
+            foreach ($anchorKeywords as $kw) {
+                if (stripos($wLower, $kw) !== false && $word['width'] > 20) {
+                    $anchorWords[] = $word;
+                    break;
+                }
+            }
+        }
+
+        $anchor = null;
+        if (!empty($anchorWords)) {
+            // Find words that are on the same line (similar Y position, within 30px)
+            // Group by Y position
+            usort($anchorWords, fn($a, $b) => $a['top'] - $b['top']);
+            $titleLine = [$anchorWords[0]];
+            $baseY = $anchorWords[0]['top'];
+            foreach ($anchorWords as $w) {
+                if (abs($w['top'] - $baseY) < 40) {
+                    $titleLine[] = $w;
+                }
+            }
+
+            // Compute bounding box spanning all title words
+            $minX = min(array_column($titleLine, 'left'));
+            $minY = min(array_column($titleLine, 'top'));
+            $maxX = max(array_map(fn($w) => $w['left'] + $w['width'], $titleLine));
+            $maxY = max(array_map(fn($w) => $w['top'] + $w['height'], $titleLine));
+
+            $anchor = [
+                'x' => $minX,
+                'y' => $minY,
+                'w' => $maxX - $minX,
+                'h' => $maxY - $minY,
+                'x_pct' => $imgWidth > 0 ? round($minX / $imgWidth, 4) : 0,
+                'y_pct' => $imgInfo ? round($minY / $imgInfo[1], 4) : 0,
+                'w_pct' => $imgWidth > 0 ? round(($maxX - $minX) / $imgWidth, 4) : 0,
+                'h_pct' => $imgInfo ? round(($maxY - $minY) / $imgInfo[1], 4) : 0,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'positions' => $positions,
+            'words' => $wordTexts,
+            'anchor' => $anchor,
+            'word_count' => count($words),
+        ]);
+    }
+
+    /**
+     * Bulk Annotate — load folder + spreadsheet data.
+     * Scans for .xlsx/.csv in folder, parses, matches with images.
+     */
+    public function htrBulkAnnotateLoad(Request $request)
+    {
+        $folder = $request->input('folder', '');
+        if (!$folder || !is_dir($folder)) {
+            return response()->json(['success' => false, 'error' => 'Folder not found']);
+        }
+
+        // Find spreadsheets
+        $spreadsheets = array_merge(
+            glob("{$folder}/*.xlsx") ?: [],
+            glob("{$folder}/*.csv") ?: [],
+            glob("{$folder}/*.xls") ?: []
+        );
+
+        $selectedSpreadsheet = $request->input('spreadsheet', '');
+
+        // No spreadsheets found — operate in image-only mode
+        if (empty($spreadsheets)) {
+            if (!$selectedSpreadsheet && $selectedSpreadsheet !== '__none__') {
+                // Return empty spreadsheet list — frontend will offer "No spreadsheet" option
+                return response()->json([
+                    'success' => true,
+                    'spreadsheets' => [],
+                    'needsSelection' => true,
+                    'noSpreadsheets' => true,
+                ]);
+            }
+
+            // Load images directly from filesystem
+            $processedDir = $folder . '/processed';
+            $processedFiles = [];
+            if (is_dir($processedDir)) {
+                $processedFiles = array_map('basename', glob("{$processedDir}/*.{jpg,jpeg,png,tif,tiff,JPG,JPEG,PNG,TIF,TIFF}", GLOB_BRACE) ?: []);
+            }
+
+            $imageFiles = glob("{$folder}/*.{jpg,jpeg,png,tif,tiff,JPG,JPEG,PNG,TIF,TIFF}", GLOB_BRACE) ?: [];
+            sort($imageFiles);
+            $images = [];
+            foreach ($imageFiles as $imgFile) {
+                $fname = basename($imgFile);
+                if (in_array($fname, $processedFiles)) continue;
+                $images[] = [
+                    'fname' => $fname,
+                    'path' => $imgFile,
+                    'fields' => [],
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'images' => $images,
+                'columns' => [],
+                'spreadsheet' => '__none__',
+                'total' => count($images),
+            ]);
+        }
+
+        // If only listing spreadsheets (no specific one selected), return the list
+        if (!$selectedSpreadsheet) {
+            // Return list of available spreadsheets for the dropdown
+            $ssNames = array_map('basename', $spreadsheets);
+            return response()->json([
+                'success' => true,
+                'spreadsheets' => $ssNames,
+                'needsSelection' => true,
+            ]);
+        }
+
+        // "__none__" means user chose to skip the spreadsheet even though ones exist
+        if ($selectedSpreadsheet === '__none__') {
+            $processedDir = $folder . '/processed';
+            $processedFiles = [];
+            if (is_dir($processedDir)) {
+                $processedFiles = array_map('basename', glob("{$processedDir}/*.{jpg,jpeg,png,tif,tiff,JPG,JPEG,PNG,TIF,TIFF}", GLOB_BRACE) ?: []);
+            }
+
+            $imageFiles = glob("{$folder}/*.{jpg,jpeg,png,tif,tiff,JPG,JPEG,PNG,TIF,TIFF}", GLOB_BRACE) ?: [];
+            sort($imageFiles);
+            $images = [];
+            foreach ($imageFiles as $imgFile) {
+                $fname = basename($imgFile);
+                if (in_array($fname, $processedFiles)) continue;
+                $images[] = [
+                    'fname' => $fname,
+                    'path' => $imgFile,
+                    'fields' => [],
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'images' => $images,
+                'columns' => [],
+                'spreadsheet' => '__none__',
+                'total' => count($images),
+            ]);
+        }
+
+        $spreadsheet = "{$folder}/{$selectedSpreadsheet}";
+        if (!file_exists($spreadsheet)) {
+            return response()->json(['success' => false, 'error' => "Spreadsheet not found: {$selectedSpreadsheet}"]);
+        }
+        $images = [];
+
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($spreadsheet);
+            $reader->setReadDataOnly(true);
+            $wb = $reader->load($spreadsheet);
+            $ws = $wb->getActiveSheet();
+            $rows = $ws->toArray(null, true, true, true);
+
+            if (empty($rows)) {
+                return response()->json(['success' => false, 'error' => 'Spreadsheet is empty']);
+            }
+
+            // First row is headers
+            $headers = array_shift($rows);
+            $fnameCol = null;
+            $isFsCsv = false;
+
+            // Detect FS Capture CSV format (has "ARK ID" column)
+            foreach ($headers as $col => $val) {
+                $lower = strtolower(trim($val ?? ''));
+                if ($lower === 'ark id') {
+                    $fnameCol = $col;
+                    $isFsCsv = true;
+                    break;
+                }
+            }
+
+            // Standard spreadsheet: look for filename column
+            if (!$fnameCol) {
+                foreach ($headers as $col => $val) {
+                    $lower = strtolower(trim($val ?? ''));
+                    if (in_array($lower, ['fname', 'filename', 'file', 'image', 'docname', 'doc_name', 'imagename', 'image_name'])) {
+                        $fnameCol = $col;
+                        break;
+                    }
+                }
+            }
+            if (!$fnameCol) $fnameCol = 'A'; // Default to first column
+
+            // Columns to ignore in the FS CSV format
+            $ignoreColumns = $isFsCsv
+                ? ['row', 'image #', 'image', 'page url', 'timestamp', 'ark id']
+                : [];
+
+            // Build processed list to skip already-done images
+            $processedDir = $folder . '/processed';
+            $processedFiles = [];
+            if (is_dir($processedDir)) {
+                $processedFiles = array_map('basename', glob("{$processedDir}/*.{jpg,jpeg,png,tif}", GLOB_BRACE));
+            }
+
+            foreach ($rows as $row) {
+                $fname = trim($row[$fnameCol] ?? '');
+                if (!$fname) continue;
+
+                // Try exact name, then with common extensions
+                $imagePath = "{$folder}/{$fname}";
+                if (!file_exists($imagePath)) {
+                    foreach (['.jpg', '.jpeg', '.png', '.tif', '.JPG'] as $ext) {
+                        if (file_exists("{$folder}/{$fname}{$ext}")) {
+                            $fname = $fname . $ext;
+                            $imagePath = "{$folder}/{$fname}";
+                            break;
+                        }
+                    }
+                }
+                if (!file_exists($imagePath)) continue;
+                if (in_array($fname, $processedFiles)) continue;
+
+                $fields = [];
+                foreach ($headers as $col => $header) {
+                    if ($col === $fnameCol) continue;
+                    $headerLower = strtolower(trim($header ?? ''));
+                    if (in_array($headerLower, $ignoreColumns)) continue;
+                    if (!$header) continue;
+                    $val = $row[$col] ?? '';
+                    if ($val instanceof \DateTime) {
+                        $val = $val->format('j F Y');
+                    }
+                    $fields[trim($header)] = (string) $val;
+                }
+
+                // Map FS Capture columns to marriage form fields when Event Type = Marriage
+                if ($isFsCsv && strtolower(trim($fields['Event Type'] ?? '')) === 'marriage') {
+                    $mapped = [];
+                    $mapped['Event Date'] = $fields['Event Date'] ?? '';
+                    $mapped['Marriage Date'] = $fields['Event Date'] ?? '';
+
+                    // Split "Event Place" → Place of Marriage + Province
+                    $eventPlace = $fields['Event Place'] ?? '';
+                    $placeParts = array_map('trim', explode(',', $eventPlace));
+                    // Remove "South Africa" from end
+                    if (count($placeParts) > 1 && strtolower(end($placeParts)) === 'south africa') {
+                        array_pop($placeParts);
+                    }
+                    $mapped['Place of Marriage'] = $placeParts[0] ?? '';
+                    $mapped['Province'] = $placeParts[1] ?? '';
+                    // District left empty — OCR only
+                    $mapped['District'] = '';
+                    $mapped['Husband Name'] = $fields['Name'] ?? '';
+                    $mapped['Husband Race'] = '';
+                    $mapped['Spouse'] = $fields['Spouse'] ?? '';
+                    $mapped['Spouse Race'] = '';
+
+                    $fields = $mapped;
+                }
+
+                $images[] = [
+                    'fname' => $fname,
+                    'path' => $imagePath,
+                    'fields' => $fields,
+                ];
+            }
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'error' => 'Spreadsheet parse error: ' . $e->getMessage()]);
+        }
+
+        // Build column list from headers (excluding filename + ignored columns)
+        $columns = [];
+        foreach ($headers as $col => $val) {
+            if ($col === $fnameCol || !$val) continue;
+            $valLower = strtolower(trim($val));
+            if (in_array($valLower, $ignoreColumns)) continue;
+            $columns[] = trim($val);
+        }
+
+        return response()->json([
+            'success' => true,
+            'images' => $images,
+            'columns' => $columns,
+            'spreadsheet' => basename($spreadsheet),
+            'total' => count($images),
+        ]);
+    }
+
+    /**
+     * Bulk Annotate — save annotation + move image to processed.
+     */
+    public function htrBulkAnnotateSave(Request $request)
+    {
+        $imagePath = $request->input('image_path', '');
+        $fname = $request->input('fname', '');
+        $fields = $request->input('fields', []);
+        $annotations = $request->input('annotations', []);
+        $folder = $request->input('folder', '');
+
+        if (!$imagePath || !file_exists($imagePath)) {
+            return response()->json(['success' => false, 'error' => 'Image not found']);
+        }
+
+        // Determine record type from fields
+        $eventType = strtolower($fields['Event Type'] ?? 'death');
+        $rtMap = [
+            'death' => ['type' => 'Death Records', 'id' => '1000015'],
+            'birth' => ['type' => 'Birth Records', 'id' => '1000001'],
+            'marriage' => ['type' => 'Marriage Records', 'id' => '1000006'],
+        ];
+        $rt = $rtMap[$eventType] ?? ['type' => 'Death Records', 'id' => '1000015'];
+        $docType = str_contains($eventType, 'death') ? 'type_a' : (str_contains($eventType, 'birth') ? 'type_a' : 'type_b');
+
+        // Extract year from Event Date
+        $eventDate = $fields['Event Date'] ?? '';
+        $year = '';
+        if (preg_match('/\b(1[6-9]\d{2}|20[0-2]\d)\b/', $eventDate, $m)) {
+            $year = $m[1];
+        }
+
+        // Build ILM annotation
+        $annData = [
+            'image' => $imagePath,
+            'doc_type' => $docType,
+            'source' => [
+                'spreadsheet' => true,
+                'folder' => $folder,
+                'annotated_at' => now()->toIso8601String(),
+            ],
+            'annotations' => [[
+                'non_genealogical' => false,
+                'non_genealogical_type_id' => null,
+                'FS_RECORD_TYPE' => $rt['type'],
+                'FS_RECORD_TYPE_ID' => $rt['id'],
+                'EVENT_YEAR_ORIG' => $year ?: ($fields['Event Date'] ?? ''),
+                'EVENT_PLACE_ORIG' => $fields['Event Place'] ?? '',
+                'LOCALITY_ID' => '',
+                'person_name' => $fields['Name'] ?? '',
+                'person_sex' => $fields['Sex'] ?? '',
+                'person_age' => $fields['Age'] ?? '',
+                'fields' => [],
+            ]],
+        ];
+
+        // Add bounding box fields from annotations
+        foreach ($annotations as $i => $ann) {
+            if (!$ann || empty($ann['label'])) continue;
+            $annData['annotations'][0]['fields'][] = [
+                'zone_id' => $i,
+                'label' => $ann['label'],
+                'form_label' => $ann['label'],
+                'text' => $ann['value'] ?? '',
+                'bbox' => [
+                    'x' => (int) ($ann['x'] ?? 0),
+                    'y' => (int) ($ann['y'] ?? 0),
+                    'w' => (int) ($ann['w'] ?? 0),
+                    'h' => (int) ($ann['h'] ?? 0),
+                ],
+            ];
+        }
+
+        // Save to training data
+        $trainingDir = '/opt/ahg-ai/htr/training_data/' . $docType;
+        $imgDir = $trainingDir . '/images';
+        $annDir = $trainingDir . '/annotations';
+        $cropDir = $trainingDir . '/crops';
+        @mkdir($imgDir, 0777, true);
+        @mkdir($annDir, 0777, true);
+        @mkdir($cropDir, 0777, true);
+
+        // Copy image to training images
+        $baseName = pathinfo($fname, PATHINFO_FILENAME);
+        copy($imagePath, "{$imgDir}/{$fname}");
+
+        // Save annotation JSON
+        file_put_contents("{$annDir}/{$fname}.json", json_encode($annData, JSON_PRETTY_PRINT));
+
+        // Crop each annotated region and save
+        try {
+            $im = imagecreatefromjpeg($imagePath);
+            if ($im) {
+                foreach ($annotations as $i => $ann) {
+                    if (!$ann || empty($ann['x'])) continue;
+                    $x = max(0, (int) $ann['x']);
+                    $y = max(0, (int) $ann['y']);
+                    $w = max(1, (int) $ann['w']);
+                    $h = max(1, (int) $ann['h']);
+                    $crop = imagecrop($im, ['x' => $x, 'y' => $y, 'width' => $w, 'height' => $h]);
+                    if ($crop) {
+                        $safeLabel = preg_replace('/[^a-zA-Z0-9_]/', '_', $ann['label'] ?? 'field');
+                        $safeVal = preg_replace('/[^a-zA-Z0-9_]/', '_', substr($ann['value'] ?? '', 0, 30));
+                        $cropName = "{$baseName}_{$i}_{$safeLabel}_{$safeVal}.jpg";
+                        imagejpeg($crop, "{$cropDir}/{$cropName}", 95);
+                        imagedestroy($crop);
+                    }
+                }
+                imagedestroy($im);
+            }
+        } catch (\Exception $e) {
+            // Crop failure is non-fatal
+        }
+
+        // Move original image to processed folder
+        $processedDir = $folder . '/processed';
+        @mkdir($processedDir, 0777, true);
+        if (file_exists($imagePath)) {
+            @rename($imagePath, "{$processedDir}/{$fname}");
+        }
+
+        // Check if all images are processed — if so, move CSV too
+        $remainingImages = glob("{$folder}/*.{jpg,jpeg,png,tif}", GLOB_BRACE);
+        $csvMoved = false;
+        if (empty($remainingImages)) {
+            // Move all CSVs and spreadsheets to processed
+            $spreadsheets = array_merge(
+                glob("{$folder}/*.csv") ?: [],
+                glob("{$folder}/*.xlsx") ?: [],
+                glob("{$folder}/*.xls") ?: []
+            );
+            foreach ($spreadsheets as $ss) {
+                $ssName = basename($ss);
+                @rename($ss, "{$processedDir}/{$ssName}");
+            }
+            $csvMoved = !empty($spreadsheets);
+        }
+
+        return response()->json([
+            'success' => true,
+            'saved' => "{$annDir}/{$fname}.json",
+            'csv_moved' => $csvMoved,
+            'remaining' => count($remainingImages ?? []),
+            'crops' => count(array_filter($annotations)),
+        ]);
+    }
+
+    /**
+     * Split a register page into individual row images for annotation.
+     * Takes the image path + array of row bounding boxes.
+     * Crops each row and saves to a temp folder, returns paths.
+     */
+    public function htrSplitRows(Request $request)
+    {
+        $path = $request->input('path', '');
+        $rows = $request->input('rows', []);
+
+        if (!$path || !file_exists($path)) {
+            return response()->json(['success' => false, 'error' => 'Image not found.']);
+        }
+        if (empty($rows)) {
+            return response()->json(['success' => false, 'error' => 'No row boxes provided.']);
+        }
+
+        $basename = pathinfo($path, PATHINFO_FILENAME);
+        $splitDir = dirname($path) . '/row_splits';
+        if (!is_dir($splitDir)) {
+            @mkdir($splitDir, 0777, true);
+        }
+
+        $cropsJson = json_encode($rows);
+        $escapedImage = escapeshellarg($path);
+        $escapedCrops = escapeshellarg($cropsJson);
+        $escapedDir = escapeshellarg($splitDir);
+        $escapedBase = escapeshellarg($basename);
+
+        $script = <<<'PY'
+import sys, json
+from PIL import Image
+img = Image.open(sys.argv[1])
+rows = json.loads(sys.argv[2])
+out_dir = sys.argv[3]
+base = sys.argv[4]
+PAD = 10
+results = []
+for i, r in enumerate(rows):
+    box = (max(0, r['x']-PAD), max(0, r['y']-PAD),
+           min(img.width, r['x']+r['w']+PAD), min(img.height, r['y']+r['h']+PAD))
+    if box[2]<=box[0] or box[3]<=box[1]: continue
+    crop = img.crop(box)
+    fname = f"{base}_row{i+1:02d}.jpg"
+    out_path = f"{out_dir}/{fname}"
+    crop.save(out_path, 'JPEG', quality=95)
+    results.append({'index': i, 'name': fname, 'path': out_path, 'width': crop.width, 'height': crop.height})
+print(json.dumps(results))
+PY;
+
+        $tmpScript = tempnam('/tmp', 'split_') . '.py';
+        file_put_contents($tmpScript, $script);
+        $output = shell_exec("python3 {$tmpScript} {$escapedImage} {$escapedCrops} {$escapedDir} {$escapedBase} 2>&1");
+        @unlink($tmpScript);
+
+        $results = json_decode(trim($output ?: '[]'), true) ?: [];
+
+        return response()->json([
+            'success' => true,
+            'rows' => $results,
+            'split_dir' => $splitDir,
+            'total' => count($results),
+        ]);
+    }
+
+    /**
+     * Add a town to the SA towns dictionary.
+     */
+    public function htrAddTown(Request $request)
+    {
+        $name = trim($request->input('name', ''));
+        $province = trim($request->input('province', ''));
+        $district = trim($request->input('district', ''));
+
+        if (!$name || strlen($name) < 2) {
+            return response()->json(['success' => false, 'error' => 'Town name too short']);
+        }
+
+        $script = <<<'PY'
+import sys, json
+sys.path.insert(0, '/opt/ahg-ai/htr')
+from places import PlaceLookup, PROVINCE_MAP
+
+pl = PlaceLookup()
+args = json.loads(sys.argv[1])
+name = args['name']
+province = args.get('province', '')
+district = args.get('district', '')
+
+# Check if already exists
+existing = pl.lookup(name, threshold=0.95)
+if existing and existing.get('match_type') == 'exact':
+    print(json.dumps({'success': False, 'error': 'Town already exists: ' + existing['name'], 'existing': existing}))
+    sys.exit(0)
+
+# Add to sa_towns list
+historical = PROVINCE_MAP.get(province, province)
+new_town = {
+    'name': name,
+    'province': province,
+    'alt_name': district if district and district != name else '',
+    'historical_province': historical,
+}
+pl.sa_towns.append(new_town)
+pl._build_index()
+pl._save_cache()
+
+print(json.dumps({
+    'success': True,
+    'town': new_town,
+    'stats': pl.stats(),
+}))
+PY;
+        $tmpPy = tempnam(sys_get_temp_dir(), 'town_') . '.py';
+        file_put_contents($tmpPy, $script);
+        $escaped = escapeshellarg(json_encode([
+            'name' => $name,
+            'province' => $province,
+            'district' => $district,
+        ]));
+        $output = shell_exec("python3 {$tmpPy} {$escaped} 2>&1");
+        @unlink($tmpPy);
+
+        $result = json_decode(trim($output ?: '{}'), true);
+        if (!$result) {
+            $result = ['success' => false, 'error' => 'Script failed: ' . substr($output ?: 'no output', 0, 200)];
+        }
+
+        if ($result['success'] ?? false) {
+            \Log::info('[HTR] Town added to dictionary', ['town' => $name, 'province' => $province]);
+        }
+
+        return response()->json($result);
+    }
+
+    public function htrSkipImage(Request $request)
+    {
+        $path = $request->input('path', '');
+        if (!$path || !file_exists($path)) {
+            return response()->json(['success' => false, 'error' => 'Image not found.']);
+        }
+
+        $sourceDir = dirname($path);
+        $reworkDir = $sourceDir . '/rework';
+        if (!is_dir($reworkDir)) {
+            @mkdir($reworkDir, 0777, true);
+        }
+        if (!is_dir($reworkDir) || !is_writable($reworkDir)) {
+            return response()->json(['success' => false, 'error' => 'Cannot create rework folder. Check folder permissions.']);
+        }
+
+        $moved = @rename($path, $reworkDir . '/' . basename($path));
+
+        return response()->json([
+            'success' => $moved,
+            'moved_to' => $moved ? $reworkDir . '/' . basename($path) : null,
+        ]);
+    }
+
+    /**
+     * Spellcheck text using the HTR dictionary (EN + AF + SA towns + custom).
+     */
+    public function htrSpellcheck(Request $request)
+    {
+        $text = $request->input('text', '');
+        if (!$text) {
+            return response()->json(['errors' => []]);
+        }
+
+        $script = <<<'PY'
+import sys, json
+sys.path.insert(0, '/opt/ahg-ai/htr')
+from spellcheck import SpellChecker
+sc = SpellChecker()
+errors = sc.check_text(sys.argv[1])
+print(json.dumps(errors))
+PY;
+        $tmp = tempnam('/tmp', 'spell_') . '.py';
+        file_put_contents($tmp, $script);
+        $escaped = escapeshellarg($text);
+        $output = shell_exec("python3 {$tmp} {$escaped} 2>/dev/null");
+        @unlink($tmp);
+
+        $errors = json_decode(trim($output ?: '[]'), true) ?: [];
+        return response()->json(['errors' => $errors]);
+    }
+
+    /**
+     * Add a word to the custom HTR dictionary.
+     */
+    public function htrAddWord(Request $request)
+    {
+        $word = $request->input('word', '');
+        if (!$word || strlen($word) < 2) {
+            return response()->json(['success' => false, 'error' => 'Word too short.']);
+        }
+
+        $script = <<<'PY'
+import sys, json
+sys.path.insert(0, '/opt/ahg-ai/htr')
+from spellcheck import SpellChecker
+sc = SpellChecker()
+ok = sc.add_word(sys.argv[1])
+print(json.dumps({'success': ok, 'word': sys.argv[1], 'stats': sc.stats()}))
+PY;
+        $tmp = tempnam('/tmp', 'addw_') . '.py';
+        file_put_contents($tmp, $script);
+        $escaped = escapeshellarg($word);
+        $output = shell_exec("python3 {$tmp} {$escaped} 2>/dev/null");
+        @unlink($tmp);
+
+        return response()->json(json_decode(trim($output ?: '{}'), true) ?: ['success' => false]);
+    }
+
+    /**
+     * List image files in a folder for the annotation tool.
+     * Accepts ?path=/tmp or ?path=type_a (shortcut for training_data/type_a/images).
+     */
+    public function htrFolderList(Request $request)
+    {
+        $path = $request->get('path', '');
+
+        // Shortcuts for training_data folders
+        $shortcuts = [
+            'type_a' => '/opt/ahg-ai/htr/training_data/type_a/images',
+            'type_b' => '/opt/ahg-ai/htr/training_data/type_b/images',
+            'type_c' => '/opt/ahg-ai/htr/training_data/type_c/images',
+        ];
+        $resolved = $shortcuts[$path] ?? $path;
+
+        if (!$resolved || !is_dir($resolved)) {
+            return response()->json(['success' => false, 'error' => 'Folder not found: ' . $resolved]);
+        }
+
+        // List image files
+        $exts = ['jpg','jpeg','png','tif','tiff','bmp','webp'];
+        $files = [];
+
+        // Recursive scan — includes subfolders but skips 'processed' folders
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($resolved, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::LEAVES_ONLY
+        );
+        foreach ($iterator as $fileInfo) {
+            // Skip processed folders
+            if (str_contains($fileInfo->getPathname(), '/processed/')) continue;
+
+            $ext = strtolower($fileInfo->getExtension());
+            if (!in_array($ext, $exts)) continue;
+
+            $full = $fileInfo->getPathname();
+            $rel = str_replace($resolved . '/', '', $full);
+
+            // Check if annotated (annotation JSON exists in training_data)
+            $basename = $fileInfo->getFilename();
+            $annotated = false;
+            foreach (['type_a','type_b','type_c'] as $t) {
+                if (file_exists("/opt/ahg-ai/htr/training_data/{$t}/annotations/{$basename}.json")) {
+                    $annotated = true;
+                    break;
+                }
+            }
+
+            $files[] = [
+                'name' => $rel,
+                'path' => $full,
+                'size' => $fileInfo->getSize(),
+                'annotated' => $annotated,
+            ];
+        }
+
+        // Sort: unannotated first, then alphabetical
+        usort($files, function ($a, $b) {
+            if ($a['annotated'] !== $b['annotated']) return $a['annotated'] ? 1 : -1;
+            return strcmp($a['name'], $b['name']);
+        });
+
+        return response()->json([
+            'success' => true,
+            'folder' => $resolved,
+            'files' => $files,
+            'total' => count($files),
+            'annotated' => count(array_filter($files, fn($f) => $f['annotated'])),
+        ]);
+    }
+
+    /**
+     * Serve an image file from disk for the annotation canvas.
+     */
+    public function htrServeImage(Request $request)
+    {
+        $path = $request->get('path', '');
+
+        if (!$path || !file_exists($path)) {
+            abort(404, 'Image not found');
+        }
+
+        // Security: only allow images from known paths
+        $allowed = ['/opt/ahg-ai/', '/tmp/', '/mnt/', '/usr/share/nginx/heratio/FamilySearch/'];
+        $ok = false;
+        foreach ($allowed as $prefix) {
+            if (str_starts_with(realpath($path), $prefix)) { $ok = true; break; }
+        }
+        if (!$ok) {
+            abort(403, 'Access denied');
+        }
+
+        return response()->file($path);
+    }
+
+    public function htrSaveAnnotation(Request $request)
+    {
+        $type = $request->input('type');
+        $annotationsJson = $request->input('annotations', '{}');
+        $annotations = json_decode($annotationsJson, true) ?? [];
+
+        if (!$type || !in_array($type, ['type_a', 'type_b', 'type_c'])) {
+            return response()->json(['success' => false, 'error' => 'Invalid type.']);
+        }
+        if (empty($annotations)) {
+            return response()->json(['success' => false, 'error' => 'No annotations provided.']);
+        }
+
+        // Determine image source: uploaded file OR server_path (folder mode)
+        $serverPath = $request->input('server_path', '');
+        $fullPath = null;
+        $tmpPath = null;
+        $isServerFile = false;
+
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $tmpPath = $file->store('htr-annotations', 'local');
+            $fullPath = storage_path('app/private/' . $tmpPath);
+        } elseif ($serverPath && file_exists($serverPath)) {
+            $fullPath = $serverPath;
+            $isServerFile = true;
+        } else {
+            return response()->json(['success' => false, 'error' => 'No image provided.']);
+        }
+
+        // Always save locally to training_data (this is the ground truth)
+        $destDir = '/opt/ahg-ai/htr/training_data/' . $type . '/images';
+        $annDir  = '/opt/ahg-ai/htr/training_data/' . $type . '/annotations';
+        $cropsDir = '/opt/ahg-ai/htr/training_data/' . $type . '/crops';
+
+        if (!is_dir($destDir)) { @mkdir($destDir, 0777, true); }
+        if (!is_dir($annDir)) { @mkdir($annDir, 0777, true); }
+        if (!is_dir($cropsDir)) { @mkdir($cropsDir, 0777, true); }
+
+        if ($isServerFile) {
+            $filename = basename($fullPath);
+            if (realpath(dirname($fullPath)) !== realpath($destDir)) {
+                copy($fullPath, $destDir . '/' . $filename);
+            }
+        } else {
+            $timestamp = (int)(microtime(true) * 1000);
+            $ext = pathinfo($fullPath, PATHINFO_EXTENSION) ?: 'jpg';
+            $filename = "annotated_{$timestamp}.{$ext}";
+            copy($fullPath, $destDir . '/' . $filename);
+        }
+
+        // Auto-translate Dutch/Afrikaans → English using glossary
+        $translated = $this->translateAnnotations($annotations);
+
+        file_put_contents($annDir . '/' . $filename . '.json', json_encode([
+            'image' => $destDir . '/' . $filename,
+            'doc_type' => $type,
+            'annotations' => $translated,
+            'created_at' => now()->toIso8601String(),
+        ], JSON_PRETTY_PRINT));
+
+        // Crop individual field regions
+        $imgPath = $destDir . '/' . $filename;
+        $this->cropAnnotatedFields($imgPath, $annotations, $cropsDir, $filename);
+
+        // Also try remote HTR service (non-blocking — local save is the source of truth)
+        $result = $this->htrService->saveAnnotation($fullPath, $type, $annotations);
+        if ($result === null) {
+            $result = ['success' => true, 'saved_locally' => true];
+        }
+
+        // Clean up temp file only if we uploaded one
+        if ($tmpPath) {
+            @unlink($fullPath);
+        }
+
+        // Move source image to processed/ folder so it's skipped on next load
+        if ($result && $isServerFile && $serverPath && file_exists($serverPath)) {
+            try {
+                $sourceDir = dirname($serverPath);
+                $processedDir = $sourceDir . '/processed';
+                if (!is_dir($processedDir)) {
+                    @mkdir($processedDir, 0777, true);
+                }
+                if (is_dir($processedDir) && is_writable($processedDir)) {
+                    $moved = @rename($serverPath, $processedDir . '/' . basename($serverPath));
+                    $result['moved_to'] = $moved ? $processedDir . '/' . basename($serverPath) : null;
+                }
+            } catch (\Exception $e) {
+                // Don't fail the save if we can't move — annotation is already saved
+                \Log::warning('Could not move to processed: ' . $e->getMessage());
+            }
+        }
+
+        return response()->json([
+            'success' => $result !== null,
+            'data'    => $result,
+            'error'   => $result === null ? 'Annotation save failed.' : null,
+        ]);
+    }
+
+    public function htrTraining()
+    {
+        // Count local training data (source of truth is on 112, not 115)
+        $baseDir = '/opt/ahg-ai/htr/training_data';
+        $counts = [];
+        foreach (['type_a', 'type_b', 'type_c'] as $type) {
+            $annDir = $baseDir . '/' . $type . '/annotations';
+            $counts[$type] = is_dir($annDir) ? count(glob($annDir . '/*.json')) : 0;
+        }
+
+        $status = [
+            'counts' => $counts,
+            'total' => array_sum($counts),
+            'training_active' => false,
+        ];
+
+        // Also try remote service for training status
+        $remote = $this->htrService->trainingStatus();
+        if ($remote && isset($remote['training_active'])) {
+            $status['training_active'] = $remote['training_active'];
+        }
+
+        return view('ahg-ai-services::htr.training', compact('status'));
+    }
+
+    public function htrStartTraining()
+    {
+        $result = $this->htrService->triggerTraining();
+
+        if ($result) {
+            return redirect()->route('admin.ai.htr.training')
+                ->with('success', 'Fine-tuning started successfully.');
+        }
+
+        return redirect()->route('admin.ai.htr.training')
+            ->with('error', 'Failed to start training. The service may be offline.');
+    }
+
+    /**
+     * Crop annotated field regions from an image and save as separate files.
+     * Each crop is saved with its label and text in the filename for training.
+     */
+
+    /**
+     * Auto-translate Dutch/Afrikaans month names and place names in annotations.
+     * Preserves original text as 'text_original', adds 'text_en' with English translation.
+     */
+    private function translateAnnotations(array $annotations): array
+    {
+        $script = <<<'PY'
+import sys, json
+sys.path.insert(0, '/opt/ahg-ai/htr')
+from glossary import translate_month, normalize_place
+
+data = json.loads(sys.argv[1])
+for ann in data:
+    for field in ann.get('fields', []):
+        text = field.get('text', '')
+        if not text:
+            continue
+        field['text_original'] = text
+        # Translate months and places
+        translated = translate_month(text)
+        translated = normalize_place(translated)
+        field['text_en'] = translated
+    # Also translate top-level ILM fields
+    for key in ['EVENT_YEAR_ORIG', 'EVENT_PLACE_ORIG']:
+        val = ann.get(key, '')
+        if val:
+            ann[key + '_original'] = val
+            t = translate_month(val)
+            t = normalize_place(t)
+            ann[key] = t
+print(json.dumps(data))
+PY;
+        $tmpScript = tempnam('/tmp', 'translate_') . '.py';
+        file_put_contents($tmpScript, $script);
+        $escapedData = escapeshellarg(json_encode($annotations));
+        $output = shell_exec("python3 {$tmpScript} {$escapedData} 2>/dev/null");
+        @unlink($tmpScript);
+
+        if ($output) {
+            $result = json_decode(trim($output), true);
+            if (is_array($result)) {
+                return $result;
+            }
+        }
+
+        return $annotations;
+    }
+
+    private function cropAnnotatedFields(string $imagePath, array $annotations, string $cropsDir, string $sourceFilename): void
+    {
+        if (!file_exists($imagePath)) return;
+
+        $base = pathinfo($sourceFilename, PATHINFO_FILENAME);
+
+        // Parse annotations — handle both flat array and nested [{fields:[...]}] format
+        $fields = [];
+        foreach ($annotations as $ann) {
+            if (isset($ann['fields'])) {
+                foreach ($ann['fields'] as $f) {
+                    $fields[] = $f;
+                }
+            } elseif (isset($ann['bbox'])) {
+                $fields[] = $ann;
+            }
+        }
+
+        if (empty($fields)) return;
+
+        // Use Python/Pillow to crop — single script call for all fields
+        $crops = [];
+        foreach ($fields as $i => $field) {
+            $bbox = $field['bbox'] ?? [];
+            if (empty($bbox['x']) && ($bbox['x'] ?? null) !== 0) continue;
+
+            $label = $field['label'] ?? ('field_' . $i);
+            $formLabel = preg_replace('/[^a-zA-Z0-9_-]/', '_', $field['form_label'] ?? '');
+            $text = preg_replace('/[^a-zA-Z0-9_-]/', '_', substr($field['text'] ?? '', 0, 40));
+            $cropName = "{$base}_{$i}_{$label}" . ($formLabel ? "_{$formLabel}" : '') . ($text ? "_{$text}" : '') . '.jpg';
+
+            $crops[] = [
+                'x' => (int)$bbox['x'],
+                'y' => (int)$bbox['y'],
+                'w' => (int)$bbox['w'],
+                'h' => (int)$bbox['h'],
+                'out' => $cropsDir . '/' . $cropName,
+                'label' => $label,
+                'text' => $field['text'] ?? '',
+            ];
+        }
+
+        if (empty($crops)) return;
+
+        $cropsJson = json_encode($crops);
+        $escapedImage = escapeshellarg($imagePath);
+        $escapedCrops = escapeshellarg($cropsJson);
+
+        // Python one-liner to crop all fields
+        $script = <<<'PY'
+import sys, json
+from PIL import Image
+img = Image.open(sys.argv[1])
+crops = json.loads(sys.argv[2])
+# ~2mm padding at 300 DPI = ~24px, at 150 DPI = ~12px. Use 20px as safe default.
+PAD = 20
+for c in crops:
+    box = (c['x']-PAD, c['y']-PAD, c['x']+c['w']+PAD, c['y']+c['h']+PAD)
+    box = (max(0,box[0]), max(0,box[1]), min(img.width,box[2]), min(img.height,box[3]))
+    if box[2]>box[0] and box[3]>box[1]:
+        crop = img.crop(box)
+        crop.save(c['out'], 'JPEG', quality=95)
+        print(c['out'])
+PY;
+
+        $tmpScript = tempnam('/tmp', 'crop_') . '.py';
+        file_put_contents($tmpScript, $script);
+        exec("python3 {$tmpScript} {$escapedImage} {$escapedCrops} 2>&1", $output);
+        @unlink($tmpScript);
+    }
+}

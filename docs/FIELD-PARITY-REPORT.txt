@@ -1,0 +1,493 @@
+# FIELD PARITY: Edit/Create Forms (OpenRiC vs Heratio)
+# Generated: 2026-03-30 06:21:23
+# Forms compared: 81
+# Perfect parity: 27
+# Total missing fields (in Heratio but not OpenRiC): 1026
+# Total extra fields (in OpenRiC but not Heratio): 61
+
+## SUMMARY BY PACKAGE
+
+Package                            Forms  O-Fld  H-Fld  Miss  Extra Status    
+──────────────────────────────────────────────────────────────────────────────
+openric-3d-model                   1      15     15     0     0     PARITY    
+openric-access-request             1      4      4      0     0     PARITY    
+openric-accession                  2      42     84     42    0     MISSING   
+openric-activity-manage            6      12     0      0     12    EXTRA     
+openric-agent-manage               6      12     258    252   6     MISSING   
+openric-ai-governance              5      41     0      0     41    EXTRA     
+openric-auth                       3      14     0      0     14    EXTRA     
+openric-condition                  1      8      0      0     8     EXTRA     
+openric-custom-fields              1      0      0      0     0     PARITY    
+openric-dacs-manage                1      0      0      0     0     PARITY    
+openric-dam                        2      93     183    90    0     MISSING   
+openric-dc-manage                  1      0      0      0     0     PARITY    
+openric-digital-object             2      12     12     0     0     PARITY    
+openric-dropdown-manage            1      2      2      0     0     PARITY    
+openric-exhibition                 2      0      0      0     0     PARITY    
+openric-extended-rights            1      27     0      0     27    EXTRA     
+openric-feedback                   1      2      3      1     0     MISSING   
+openric-function-manage            1      22     22     0     0     PARITY    
+openric-gallery                    2      51     148    117   20    MISSING   
+openric-iiif-collection            3      18     0      0     18    EXTRA     
+openric-instantiation-manage       2      4      0      0     4     EXTRA     
+openric-landing-page               2      11     12     1     0     MISSING   
+openric-library                    2      57     114    57    0     MISSING   
+openric-loan                       3      49     70     21    0     MISSING   
+openric-menu-manage                1      5      5      0     0     PARITY    
+openric-mods-manage                1      0      0      0     0     PARITY    
+openric-multi-tenant               1      0      0      0     0     PARITY    
+openric-museum                     2      58     116    58    0     MISSING   
+openric-place-manage               2      4      0      0     4     EXTRA     
+openric-rad-manage                 1      21     0      0     21    EXTRA     
+openric-record-manage              7      32     398    384   18    MISSING   
+openric-reports                    2      8      5      0     3     EXTRA     
+openric-repository                 1      47     47     0     0     PARITY    
+openric-request-publish            1      2      2      0     0     PARITY    
+openric-rights                     2      10     0      0     10    EXTRA     
+openric-rights-holder-manage       2      11     12     1     0     MISSING   
+openric-static-page                1      3      3      0     0     PARITY    
+openric-storage-manage             1      30     30     0     0     PARITY    
+openric-term-taxonomy              1      11     11     0     0     PARITY    
+openric-user-manage                1      18     20     2     0     MISSING   
+openric-vendor                     2      0      0      0     0     PARITY    
+
+
+## DETAILED FORM-BY-FORM AUDIT
+
+Package                            View                Type    O-Fld  H-Fld  Miss  Extra 
+─────────────────────────────────────────────────────────────────────────────────────────
+openric-3d-model                   edit                unknown 15     15     0     0      OK
+  Heratio: ahg-3d-model/resources/views/edit.blade.php
+
+openric-access-request             new                 create  4      4      0     0      OK
+  Heratio: ahg-access-request/resources/views/new.blade.php
+
+openric-accession                  edit                create  42     42     0     0      OK
+  Heratio: ahg-accession-manage/resources/views/edit.blade.php
+
+openric-accession                  add                 unknown 0      42     42    0      !!
+  MISSING (in Heratio, not in OpenRiC): identifier, identifierType, note, date, source_of_acquisition, location_information, donor_name, donor_contact_person, donor_telephone, donor_fax, donor_email, donor_url, donor_street_address, donor_region, donor_country, donor_postal_code, donor_city, donor_latitude, donor_longitude, donor_contact_type, donor_note, acquisition_type_id, resource_type_id, title, creators, type, startDate, endDate, eventType, agent, archival_history, scope_and_content, appraisal, physical_characteristics, received_extent_units, processing_status_id, processing_priority_id, processing_notes, information_objects, alternativeIdentifiers[, events[, editEvents[
+  Heratio fields: identifier, identifierType, note, date, source_of_acquisition, location_information, donor_name, donor_contact_person, donor_telephone, donor_fax, donor_email, donor_url, donor_street_address, donor_region, donor_country, donor_postal_code, donor_city, donor_latitude, donor_longitude, donor_contact_type, donor_note, acquisition_type_id, resource_type_id, title, creators, type, startDate, endDate, eventType, agent, archival_history, scope_and_content, appraisal, physical_characteristics, received_extent_units, processing_status_id, processing_priority_id, processing_notes, information_objects, alternativeIdentifiers[, events[, editEvents[
+  Heratio: ahg-accession-manage/resources/views/add.blade.php, ahg-accession-manage/resources/views/edit.blade.php
+
+openric-activity-manage            activities/edit     edit    2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-activity-manage            activities/create   create  2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-activity-manage            functions/edit      edit    2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-activity-manage            functions/create    create  2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-activity-manage            mandates/edit       edit    2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-activity-manage            mandates/create     create  2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-agent-manage               corporate-bodies/editedit    2      43     42    1      !!
+  MISSING (in Heratio, not in OpenRiC): entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  EXTRA (in OpenRiC, not in Heratio):   identifier
+  OpenRiC fields: title, identifier
+  Heratio fields: entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, title, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  Heratio: ahg-actor-manage/resources/views/edit.blade.php
+
+openric-agent-manage               corporate-bodies/createcreate  2      43     42    1      !!
+  MISSING (in Heratio, not in OpenRiC): entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  EXTRA (in OpenRiC, not in Heratio):   identifier
+  OpenRiC fields: title, identifier
+  Heratio fields: entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, title, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  Heratio: ahg-actor-manage/resources/views/edit.blade.php
+
+openric-agent-manage               persons/edit        edit    2      43     42    1      !!
+  MISSING (in Heratio, not in OpenRiC): entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  EXTRA (in OpenRiC, not in Heratio):   identifier
+  OpenRiC fields: title, identifier
+  Heratio fields: entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, title, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  Heratio: ahg-actor-manage/resources/views/edit.blade.php
+
+openric-agent-manage               persons/create      create  2      43     42    1      !!
+  MISSING (in Heratio, not in OpenRiC): entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  EXTRA (in OpenRiC, not in Heratio):   identifier
+  OpenRiC fields: title, identifier
+  Heratio fields: entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, title, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  Heratio: ahg-actor-manage/resources/views/edit.blade.php
+
+openric-agent-manage               families/edit       edit    2      43     42    1      !!
+  MISSING (in Heratio, not in OpenRiC): entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  EXTRA (in OpenRiC, not in Heratio):   identifier
+  OpenRiC fields: title, identifier
+  Heratio fields: entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, title, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  Heratio: ahg-actor-manage/resources/views/edit.blade.php
+
+openric-agent-manage               families/create     create  2      43     42    1      !!
+  MISSING (in Heratio, not in OpenRiC): entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  EXTRA (in OpenRiC, not in Heratio):   identifier
+  OpenRiC fields: title, identifier
+  Heratio fields: entity_type_id, authorized_form_of_name, parallel[0][type_id], parallel[0][name], standardized[0][type_id], standardized[0][name], other[0][type_id], other[0][name], corporate_body_identifiers, parent_actor_name, parent_id, dates_of_existence, history, places, legal_status, functions, mandates, internal_structures, general_context, name, category, type, dates, description, title, relationship, occupation, content, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, language[], script[], sources, maintenance_notes, source_standard, relatedActors[, relatedResources[, occupations[, other_names[
+  Heratio: ahg-actor-manage/resources/views/edit.blade.php
+
+openric-ai-governance              readiness/create    create  9      0      0     9      !!
+  EXTRA (in OpenRiC, not in Heratio):   collection_iri, collection_title, digitization_completeness, corpus_completeness, known_gaps, excluded_records, legal_exclusions, privacy_exclusions, representational_bias_notes
+  OpenRiC fields: collection_iri, collection_title, digitization_completeness, corpus_completeness, known_gaps, excluded_records, legal_exclusions, privacy_exclusions, representational_bias_notes
+  Heratio: NO EQUIVALENT
+
+openric-ai-governance              languages/create    create  8      0      0     8      !!
+  EXTRA (in OpenRiC, not in Heratio):   language_code, language_name, ai_allowed, translation_allowed, embedding_enabled, competency_required, access_warning, competency_languages
+  OpenRiC fields: language_code, language_name, ai_allowed, translation_allowed, embedding_enabled, competency_required, access_warning, competency_languages
+  Heratio: NO EQUIVALENT
+
+openric-ai-governance              bias/create         create  6      0      0     6      !!
+  EXTRA (in OpenRiC, not in Heratio):   entity_iri, category, description, severity, ai_warning, mitigation_strategy
+  OpenRiC fields: entity_iri, category, description, severity, ai_warning, mitigation_strategy
+  Heratio: NO EQUIVALENT
+
+openric-ai-governance              rights/create       create  10     0      0     10     !!
+  EXTRA (in OpenRiC, not in Heratio):   entity_iri, entity_type, ai_allowed, summarisation_allowed, embedding_allowed, training_reuse_allowed, redaction_required, ai_review_notes, valid_from, valid_until
+  OpenRiC fields: entity_iri, entity_type, ai_allowed, summarisation_allowed, embedding_allowed, training_reuse_allowed, redaction_required, ai_review_notes, valid_from, valid_until
+  Heratio: NO EQUIVALENT
+
+openric-ai-governance              derivatives/create  create  8      0      0     8      !!
+  EXTRA (in OpenRiC, not in Heratio):   collection_iri, cleaned_ocr_text, normalised_metadata_export, chunked_retrieval_units, redacted_access_copies, multilingual_alignment, chunk_size, chunk_overlap
+  OpenRiC fields: collection_iri, cleaned_ocr_text, normalised_metadata_export, chunked_retrieval_units, redacted_access_copies, multilingual_alignment, chunk_size, chunk_overlap
+  Heratio: NO EQUIVALENT
+
+openric-auth                       acl/edit            unknown 0      0      0     0      OK
+  Heratio: ahg-acl/resources/views/edit.blade.php
+
+openric-auth                       users/edit          edit    7      0      0     7      !!
+  EXTRA (in OpenRiC, not in Heratio):   username, email, password, password_confirmation, display_name, roles[], active
+  OpenRiC fields: username, email, password, password_confirmation, display_name, roles[], active
+  Heratio: ahg-acl/resources/views/edit.blade.php
+
+openric-auth                       users/create        create  7      0      0     7      !!
+  EXTRA (in OpenRiC, not in Heratio):   username, email, password, password_confirmation, display_name, roles[], active
+  OpenRiC fields: username, email, password, password_confirmation, display_name, roles[], active
+  Heratio: ahg-acl/resources/views/edit.blade.php
+
+openric-condition                  create              create  8      0      0     8      !!
+  EXTRA (in OpenRiC, not in Heratio):   object_iri, condition_code, condition_label, conservation_priority, completeness_pct, next_assessment_date, storage_requirements, recommendations
+  OpenRiC fields: object_iri, condition_code, condition_label, conservation_priority, completeness_pct, next_assessment_date, storage_requirements, recommendations
+  Heratio: NO EQUIVALENT
+
+openric-custom-fields              admin/edit          unknown 0      0      0     0      OK
+  Heratio: ahg-custom-fields/resources/views/admin/edit.blade.php
+
+openric-dacs-manage                edit                unknown 0      0      0     0      OK
+  Heratio: NO EQUIVALENT
+
+openric-dam                        dam/edit            edit    91     91     0     0      OK
+  Heratio: ahg-dam/resources/views/dam/edit.blade.php
+
+openric-dam                        create              unknown 2      92     90    0      !!
+  MISSING (in Heratio, not in OpenRiC): parent_id, identifier, repository_id, level_of_description_id, extent_and_medium, scope_and_content, asset_type, genre, color_type, duration_minutes, production_company, distributor, broadcast_date, production_country, production_country_code, season_number, episode_number, series_title, awards, credit_role[], credit_name[], audio_language, subtitle_language, iptc_creator, iptc_creator_job_title, iptc_creator_email, iptc_creator_phone, iptc_creator_website, iptc_creator_city, iptc_creator_address, iptc_headline, iptc_caption, iptc_keywords, iptc_subject_code, iptc_intellectual_genre, iptc_persons_shown, iptc_date_created, iptc_city, iptc_state_province, iptc_sublocation, iptc_country, iptc_country_code, iptc_credit_line, iptc_source, iptc_copyright_notice, iptc_rights_usage_terms, iptc_license_type, iptc_license_url, iptc_license_expiry, iptc_model_release_status, iptc_model_release_id, iptc_property_release_status, iptc_property_release_id, iptc_artwork_title, iptc_artwork_creator, iptc_artwork_date, iptc_artwork_source, iptc_artwork_copyright, iptc_title, iptc_job_id, iptc_instructions, version_id[], version_title[], version_type[], version_language[], version_language_code[], version_year[], version_notes[], holding_id[], holding_format[], holding_format_details[], holding_institution[], holding_location[], holding_accession[], holding_condition[], holding_access[], holding_url[], holding_verified[], holding_primary[], holding_access_notes[], holding_notes[], link_id[], link_type[], link_url[], link_title[], link_verified[], link_primary[], link_person[], link_role[], link_description[]
+  OpenRiC fields: title, description
+  Heratio fields: title, description, parent_id, identifier, repository_id, level_of_description_id, extent_and_medium, scope_and_content, asset_type, genre, color_type, duration_minutes, production_company, distributor, broadcast_date, production_country, production_country_code, season_number, episode_number, series_title, awards, credit_role[], credit_name[], audio_language, subtitle_language, iptc_creator, iptc_creator_job_title, iptc_creator_email, iptc_creator_phone, iptc_creator_website, iptc_creator_city, iptc_creator_address, iptc_headline, iptc_caption, iptc_keywords, iptc_subject_code, iptc_intellectual_genre, iptc_persons_shown, iptc_date_created, iptc_city, iptc_state_province, iptc_sublocation, iptc_country, iptc_country_code, iptc_credit_line, iptc_source, iptc_copyright_notice, iptc_rights_usage_terms, iptc_license_type, iptc_license_url, iptc_license_expiry, iptc_model_release_status, iptc_model_release_id, iptc_property_release_status, iptc_property_release_id, iptc_artwork_title, iptc_artwork_creator, iptc_artwork_date, iptc_artwork_source, iptc_artwork_copyright, iptc_title, iptc_job_id, iptc_instructions, version_id[], version_title[], version_type[], version_language[], version_language_code[], version_year[], version_notes[], holding_id[], holding_format[], holding_format_details[], holding_institution[], holding_location[], holding_accession[], holding_condition[], holding_access[], holding_url[], holding_verified[], holding_primary[], holding_access_notes[], holding_notes[], link_id[], link_type[], link_url[], link_title[], link_verified[], link_primary[], link_person[], link_role[], link_description[]
+  Heratio: ahg-dam/resources/views/create.blade.php, ahg-dam/resources/views/dam/edit.blade.php
+
+openric-dc-manage                  edit                unknown 0      0      0     0      OK
+  Heratio: NO EQUIVALENT
+
+openric-digital-object             iiif-collection/editedit    6      6      0     0      OK
+  Heratio: ahg-iiif-collection/resources/views/iiif-collection/edit.blade.php
+
+openric-digital-object             iiif-collection/createcreate  6      6      0     0      OK
+  Heratio: ahg-iiif-collection/resources/views/iiif-collection/create.blade.php, ahg-iiif-collection/resources/views/iiifCollection/new.blade.php, ahg-iiif-collection/resources/views/iiif-collection/edit.blade.php
+
+openric-dropdown-manage            edit                unknown 2      2      0     0      OK
+  Heratio: ahg-dropdown-manage/resources/views/edit.blade.php
+
+openric-exhibition                 edit                edit    0      0      0     0      OK
+  Heratio: ahg-exhibition/resources/views/edit.blade.php
+
+openric-exhibition                 add                 create  0      0      0     0      OK
+  Heratio: ahg-exhibition/resources/views/add.blade.php, ahg-exhibition/resources/views/edit.blade.php
+
+openric-extended-rights            rights/edit         unknown 27     0      0     27     !!
+  EXTRA (in OpenRiC, not in Heratio):   basis, rights_statement_id, copyright_status, copyright_status_date, copyright_jurisdiction, copyright_expiry_date, copyright_holder, copyright_note, license_type, cc_license_id, license_identifier, license_url, license_terms, statute_jurisdiction, statute_determination_date, statute_citation, statute_note, donor_name, policy_identifier, start_date, end_date, end_date_open, rights_holder_name, rights_note, acts[], restrictions[], restriction_reasons[]
+  OpenRiC fields: basis, rights_statement_id, copyright_status, copyright_status_date, copyright_jurisdiction, copyright_expiry_date, copyright_holder, copyright_note, license_type, cc_license_id, license_identifier, license_url, license_terms, statute_jurisdiction, statute_determination_date, statute_citation, statute_note, donor_name, policy_identifier, start_date, end_date, end_date_open, rights_holder_name, rights_note, acts[], restrictions[], restriction_reasons[]
+  Heratio: NO EQUIVALENT
+
+openric-feedback                   edit                edit    2      3      1     0      !!
+  MISSING (in Heratio, not in OpenRiC): completed_at
+  OpenRiC fields: status, admin_notes
+  Heratio fields: status, admin_notes, completed_at
+  Heratio: ahg-feedback/resources/views/edit.blade.php
+
+openric-function-manage            edit                create  22     22     0     0      OK
+  Heratio: ahg-function-manage/resources/views/edit.blade.php
+
+openric-gallery                    gallery/edit        edit    51     74     43    20     !!
+  MISSING (in Heratio, not in OpenRiC): work_type_qualifier, components_count, object_number, title_type, title_language, alternate_titles, creator_display, creator, attribution_qualifier, culture, school_group, dimensions_display, height_value, width_value, depth_value, weight_value, dimension_notes, materials_display, support, subject_display, subjects_depicted, iconography, named_subjects, inscriptions, signature, marks, edition_number, edition_size, state, impression_quality, description, physical_description, condition_summary, condition_notes, repository, location_within_repository, credit_line, related_works, relationship_type, rights_statement, copyright_holder, reproduction_conditions, switch_template
+  EXTRA (in OpenRiC, not in Heratio):   classification, identifier, alternate_title, creator_identity, movement, school, measurements, dimensions, scope_and_content, inscription, mark_description, condition_term, condition_description, provenance, current_location, repository_id, rights_type, rights_holder, cataloger_name, cataloging_date
+  OpenRiC fields: saveAnyway, template, parent, id, work_type, classification, identifier, title, alternate_title, creator_identity, creator_role, creation_date_display, creation_date_earliest, creation_date_latest, creation_place, style, period, movement, school, measurements, dimensions, materials, techniques, scope_and_content, inscription, mark_description, condition_term, condition_description, provenance, current_location, repository_id, rights_type, rights_holder, cataloger_name, cataloging_date, displayStandard, displayStandardUpdateDescendants, item_physical_object_id, item_barcode, item_box_number, item_folder_number, item_shelf, item_row, item_position, item_item_number, item_extent_value, item_extent_unit, item_condition_status, item_access_status, item_condition_notes, item_location_notes
+  Heratio fields: saveAnyway, template, parent, id, work_type, work_type_qualifier, components_count, object_number, title, title_type, title_language, alternate_titles, creator_display, creator, creator_role, attribution_qualifier, creation_date_display, creation_date_earliest, creation_date_latest, creation_place, culture, style, period, school_group, dimensions_display, height_value, width_value, depth_value, weight_value, dimension_notes, materials_display, materials, techniques, support, subject_display, subjects_depicted, iconography, named_subjects, inscriptions, signature, marks, edition_number, edition_size, state, impression_quality, description, physical_description, condition_summary, condition_notes, repository, location_within_repository, credit_line, related_works, relationship_type, rights_statement, copyright_holder, reproduction_conditions, item_physical_object_id, item_barcode, item_box_number, item_folder_number, item_shelf, item_row, item_position, item_item_number, item_extent_value, item_extent_unit, item_condition_status, item_access_status, item_condition_notes, item_location_notes, displayStandard, displayStandardUpdateDescendants, switch_template
+  Heratio: ahg-gallery/resources/views/gallery/edit.blade.php
+
+openric-gallery                    gallery/add         unknown 0      74     74    0      !!
+  MISSING (in Heratio, not in OpenRiC): saveAnyway, template, parent, id, work_type, work_type_qualifier, components_count, object_number, title, title_type, title_language, alternate_titles, creator_display, creator, creator_role, attribution_qualifier, creation_date_display, creation_date_earliest, creation_date_latest, creation_place, culture, style, period, school_group, dimensions_display, height_value, width_value, depth_value, weight_value, dimension_notes, materials_display, materials, techniques, support, subject_display, subjects_depicted, iconography, named_subjects, inscriptions, signature, marks, edition_number, edition_size, state, impression_quality, description, physical_description, condition_summary, condition_notes, repository, location_within_repository, credit_line, related_works, relationship_type, rights_statement, copyright_holder, reproduction_conditions, item_physical_object_id, item_barcode, item_box_number, item_folder_number, item_shelf, item_row, item_position, item_item_number, item_extent_value, item_extent_unit, item_condition_status, item_access_status, item_condition_notes, item_location_notes, displayStandard, displayStandardUpdateDescendants, switch_template
+  Heratio fields: saveAnyway, template, parent, id, work_type, work_type_qualifier, components_count, object_number, title, title_type, title_language, alternate_titles, creator_display, creator, creator_role, attribution_qualifier, creation_date_display, creation_date_earliest, creation_date_latest, creation_place, culture, style, period, school_group, dimensions_display, height_value, width_value, depth_value, weight_value, dimension_notes, materials_display, materials, techniques, support, subject_display, subjects_depicted, iconography, named_subjects, inscriptions, signature, marks, edition_number, edition_size, state, impression_quality, description, physical_description, condition_summary, condition_notes, repository, location_within_repository, credit_line, related_works, relationship_type, rights_statement, copyright_holder, reproduction_conditions, item_physical_object_id, item_barcode, item_box_number, item_folder_number, item_shelf, item_row, item_position, item_item_number, item_extent_value, item_extent_unit, item_condition_status, item_access_status, item_condition_notes, item_location_notes, displayStandard, displayStandardUpdateDescendants, switch_template
+  Heratio: ahg-gallery/resources/views/gallery/add.blade.php, ahg-gallery/resources/views/gallery/edit.blade.php
+
+openric-iiif-collection            iiif-collection/editedit    6      0      0     6      !!
+  EXTRA (in OpenRiC, not in Heratio):   name, parent_id, description, attribution, viewing_hint, is_public
+  OpenRiC fields: name, parent_id, description, attribution, viewing_hint, is_public
+  Heratio: NO EQUIVALENT
+
+openric-iiif-collection            iiif-collection/createcreate  6      0      0     6      !!
+  EXTRA (in OpenRiC, not in Heratio):   name, parent_id, description, attribution, viewing_hint, is_public
+  OpenRiC fields: name, parent_id, description, attribution, viewing_hint, is_public
+  Heratio: NO EQUIVALENT
+
+openric-iiif-collection            iiifCollection/new  create  6      0      0     6      !!
+  EXTRA (in OpenRiC, not in Heratio):   name, viewing_hint, description, attribution, parent_id, is_public
+  OpenRiC fields: name, viewing_hint, description, attribution, parent_id, is_public
+  Heratio: NO EQUIVALENT
+
+openric-instantiation-manage       instantiations/edit edit    2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-instantiation-manage       instantiations/createcreate  2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-landing-page               edit                unknown 6      6      0     0      OK
+  Heratio: ahg-landing-page/resources/views/edit.blade.php
+
+openric-landing-page               create              unknown 5      6      1     0      !!
+  MISSING (in Heratio, not in OpenRiC): id
+  OpenRiC fields: name, slug, description, is_default, is_active
+  Heratio fields: name, slug, description, is_default, is_active, id
+  Heratio: ahg-landing-page/resources/views/create.blade.php, ahg-landing-page/resources/views/edit.blade.php
+
+openric-library                    library/edit        edit    57     57     0     0      OK
+  Heratio: ahg-library/resources/views/library/edit.blade.php
+
+openric-library                    library/add         unknown 0      57     57    0      !!
+  MISSING (in Heratio, not in OpenRiC): parent, title, subtitle, identifier, responsibility_statement, level_of_description_id, material_type, language, isbn, issn, doi, lccn, oclc_number, barcode, openlibrary_id, goodreads_id, librarything_id, openlibrary_url, classification_scheme, call_number, dewey_decimal, shelf_location, copy_number, volume_designation, publisher, publication_place, publication_date, edition, edition_statement, series_title, series_number, pagination, dimensions, physical_details, summary, scope_and_content, contents_note, general_note, bibliography_note, cover_url, ebook_preview_url, item_physical_object_id, item_barcode, item_box_number, item_folder_number, item_shelf, item_row, item_position, item_item_number, item_extent_value, item_extent_unit, item_condition_status, item_access_status, item_condition_notes, item_location_notes, creators[, subjects[
+  Heratio fields: parent, title, subtitle, identifier, responsibility_statement, level_of_description_id, material_type, language, isbn, issn, doi, lccn, oclc_number, barcode, openlibrary_id, goodreads_id, librarything_id, openlibrary_url, classification_scheme, call_number, dewey_decimal, shelf_location, copy_number, volume_designation, publisher, publication_place, publication_date, edition, edition_statement, series_title, series_number, pagination, dimensions, physical_details, summary, scope_and_content, contents_note, general_note, bibliography_note, cover_url, ebook_preview_url, item_physical_object_id, item_barcode, item_box_number, item_folder_number, item_shelf, item_row, item_position, item_item_number, item_extent_value, item_extent_unit, item_condition_status, item_access_status, item_condition_notes, item_location_notes, creators[, subjects[
+  Heratio: ahg-library/resources/views/library/add.blade.php, ahg-library/resources/views/library/edit.blade.php
+
+openric-loan                       add                 unknown 4      24     20    0      !!
+  MISSING (in Heratio, not in OpenRiC): object_id, loan_type, sector, title, description, notes, partner_institution, partner_contact_name, partner_contact_email, partner_contact_phone, partner_address, request_date, insurance_type, insurance_currency, insurance_value, insurance_provider, insurance_policy_number, loan_fee_currency, loan_fee, repository_id
+  OpenRiC fields: borrower, purpose, start_date, end_date
+  Heratio fields: borrower, purpose, start_date, end_date, object_id, loan_type, sector, title, description, notes, partner_institution, partner_contact_name, partner_contact_email, partner_contact_phone, partner_address, request_date, insurance_type, insurance_currency, insurance_value, insurance_provider, insurance_policy_number, loan_fee_currency, loan_fee, repository_id
+  Heratio: ahg-loan/resources/views/add.blade.php, ahg-loan/resources/views/loan/create.blade.php, ahg-loan/resources/views/loan/edit.blade.php
+
+openric-loan                       loan/edit           edit    22     22     0     0      OK
+  Heratio: ahg-loan/resources/views/loan/edit.blade.php
+
+openric-loan                       loan/create         create  23     24     1     0      !!
+  MISSING (in Heratio, not in OpenRiC): borrower
+  OpenRiC fields: object_id, loan_type, sector, purpose, title, description, notes, partner_institution, partner_contact_name, partner_contact_email, partner_contact_phone, partner_address, request_date, start_date, end_date, insurance_type, insurance_currency, insurance_value, insurance_provider, insurance_policy_number, loan_fee_currency, loan_fee, repository_id
+  Heratio fields: object_id, loan_type, sector, purpose, title, description, notes, partner_institution, partner_contact_name, partner_contact_email, partner_contact_phone, partner_address, request_date, start_date, end_date, insurance_type, insurance_currency, insurance_value, insurance_provider, insurance_policy_number, loan_fee_currency, loan_fee, repository_id, borrower
+  Heratio: ahg-loan/resources/views/loan/create.blade.php, ahg-loan/resources/views/add.blade.php, ahg-loan/resources/views/loan/edit.blade.php
+
+openric-menu-manage                edit                create  5      5      0     0      OK
+  Heratio: ahg-menu-manage/resources/views/edit.blade.php
+
+openric-mods-manage                edit                unknown 0      0      0     0      OK
+  Heratio: NO EQUIVALENT
+
+openric-multi-tenant               create              unknown 0      0      0     0      OK
+  Heratio: ahg-multi-tenant/resources/views/create.blade.php
+
+openric-museum                     museum/edit         edit    58     58     0     0      OK
+  Heratio: ahg-museum/resources/views/museum/edit.blade.php
+
+openric-museum                     museum/add          unknown 0      58     58    0      !!
+  MISSING (in Heratio, not in OpenRiC): work_type, object_number, title, title_type, creator_display, creator, creator_role, attribution_qualifier, creation_date_display, creation_date_earliest, creation_date_latest, creation_place, culture, style, period, dimensions_display, height_value, width_value, depth_value, materials_display, materials, techniques, support, subject_display, subjects_depicted, inscriptions, signature, description, condition_summary, repository, location_within_repository, credit_line, rights_statement, item_physical_object_id, item_barcode, item_box_number, item_folder_number, item_shelf, item_row, item_position, item_item_number, item_extent_value, item_extent_unit, item_condition_status, item_access_status, item_condition_notes, item_location_notes, watermark_enabled, watermark_type_id, custom_watermark_id, new_watermark_name, new_watermark_file, new_watermark_position, new_watermark_opacity, new_watermark_global, regenerate_watermark, displayStandard, displayStandardUpdateDescendants
+  Heratio fields: work_type, object_number, title, title_type, creator_display, creator, creator_role, attribution_qualifier, creation_date_display, creation_date_earliest, creation_date_latest, creation_place, culture, style, period, dimensions_display, height_value, width_value, depth_value, materials_display, materials, techniques, support, subject_display, subjects_depicted, inscriptions, signature, description, condition_summary, repository, location_within_repository, credit_line, rights_statement, item_physical_object_id, item_barcode, item_box_number, item_folder_number, item_shelf, item_row, item_position, item_item_number, item_extent_value, item_extent_unit, item_condition_status, item_access_status, item_condition_notes, item_location_notes, watermark_enabled, watermark_type_id, custom_watermark_id, new_watermark_name, new_watermark_file, new_watermark_position, new_watermark_opacity, new_watermark_global, regenerate_watermark, displayStandard, displayStandardUpdateDescendants
+  Heratio: ahg-museum/resources/views/museum/add.blade.php, ahg-museum/resources/views/museum/edit.blade.php
+
+openric-place-manage               places/edit         edit    2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-place-manage               places/create       create  2      0      0     2      !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier
+  OpenRiC fields: title, identifier
+  Heratio: NO EQUIVALENT
+
+openric-rad-manage                 edit                unknown 21     0      0     21     !!
+  EXTRA (in OpenRiC, not in Heratio):   title, identifier, level_of_description_id, alternate_title, extent_and_medium, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, physical_characteristics, location_of_originals, location_of_copies, related_units_of_description, institution_responsible_identifier, rules, sources, revision_history
+  OpenRiC fields: title, identifier, level_of_description_id, alternate_title, extent_and_medium, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, physical_characteristics, location_of_originals, location_of_copies, related_units_of_description, institution_responsible_identifier, rules, sources, revision_history
+  Heratio: NO EQUIVALENT
+
+openric-record-manage              condition/create    create  10     59     59    10     !!
+  MISSING (in Heratio, not in OpenRiC): parent_id, identifier, title, level_of_description_id, extent_and_medium, _creatorsIncluded, repository_id, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, subjectAccessPointIds[], placeAccessPointIds[], genreAccessPointIds[], description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, publication_status_id, display_standard_id, security_classification_id, events[, altIds[, notes[, publicationNotes[, archivistNotes[, alternate_title, edition, source_standard, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, collection_type_id, updateDescendants, childLevels[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  EXTRA (in OpenRiC, not in Heratio):   assessment_date, overall_rating, context, priority, summary, recommendations, next_check_date, environmental_notes, handling_notes, storage_notes
+  OpenRiC fields: assessment_date, overall_rating, context, priority, summary, recommendations, next_check_date, environmental_notes, handling_notes, storage_notes
+  Heratio fields: parent_id, identifier, title, level_of_description_id, extent_and_medium, _creatorsIncluded, repository_id, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, subjectAccessPointIds[], placeAccessPointIds[], genreAccessPointIds[], description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, publication_status_id, display_standard_id, security_classification_id, events[, altIds[, notes[, publicationNotes[, archivistNotes[, alternate_title, edition, source_standard, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, collection_type_id, updateDescendants, childLevels[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  Heratio: ahg-information-object-manage/resources/views/create.blade.php, ahg-information-object-manage/resources/views/edit.blade.php, ahg-information-object-manage/resources/views/digitalobject/edit.blade.php
+
+openric-record-manage              record-set/edit     edit    4      54     51    1      !!
+  MISSING (in Heratio, not in OpenRiC): alternate_title, edition, level_of_description_id, extent_and_medium, _creatorsIncluded, archival_history, acquisition, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, source_standard, security_classification_id, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, publication_status_id, collection_type_id, display_standard_id, updateDescendants, events[, altIds[, childLevels[, notes[, publicationNotes[, archivistNotes[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  EXTRA (in OpenRiC, not in Heratio):   level
+  OpenRiC fields: title, identifier, level, scope_and_content
+  Heratio fields: identifier, title, alternate_title, edition, level_of_description_id, extent_and_medium, _creatorsIncluded, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, source_standard, security_classification_id, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, publication_status_id, collection_type_id, display_standard_id, updateDescendants, events[, altIds[, childLevels[, notes[, publicationNotes[, archivistNotes[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  Heratio: ahg-information-object-manage/resources/views/edit.blade.php, ahg-information-object-manage/resources/views/digitalobject/edit.blade.php
+
+openric-record-manage              record-set/create   create  8      59     56    5      !!
+  MISSING (in Heratio, not in OpenRiC): parent_id, level_of_description_id, extent_and_medium, _creatorsIncluded, repository_id, archival_history, acquisition, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, subjectAccessPointIds[], placeAccessPointIds[], genreAccessPointIds[], description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, publication_status_id, display_standard_id, security_classification_id, events[, altIds[, notes[, publicationNotes[, archivistNotes[, alternate_title, edition, source_standard, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, collection_type_id, updateDescendants, childLevels[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  EXTRA (in OpenRiC, not in Heratio):   level, date_begin, date_end, date_expression, parent_iri
+  OpenRiC fields: title, identifier, level, scope_and_content, date_begin, date_end, date_expression, parent_iri
+  Heratio fields: parent_id, identifier, title, level_of_description_id, extent_and_medium, _creatorsIncluded, repository_id, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, subjectAccessPointIds[], placeAccessPointIds[], genreAccessPointIds[], description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, publication_status_id, display_standard_id, security_classification_id, events[, altIds[, notes[, publicationNotes[, archivistNotes[, alternate_title, edition, source_standard, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, collection_type_id, updateDescendants, childLevels[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  Heratio: ahg-information-object-manage/resources/views/create.blade.php, ahg-information-object-manage/resources/views/edit.blade.php, ahg-information-object-manage/resources/views/digitalobject/edit.blade.php
+
+openric-record-manage              record-part/edit    edit    2      54     52    0      !!
+  MISSING (in Heratio, not in OpenRiC): alternate_title, edition, level_of_description_id, extent_and_medium, _creatorsIncluded, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, source_standard, security_classification_id, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, publication_status_id, collection_type_id, display_standard_id, updateDescendants, events[, altIds[, childLevels[, notes[, publicationNotes[, archivistNotes[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  OpenRiC fields: title, identifier
+  Heratio fields: identifier, title, alternate_title, edition, level_of_description_id, extent_and_medium, _creatorsIncluded, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, source_standard, security_classification_id, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, publication_status_id, collection_type_id, display_standard_id, updateDescendants, events[, altIds[, childLevels[, notes[, publicationNotes[, archivistNotes[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  Heratio: ahg-information-object-manage/resources/views/edit.blade.php, ahg-information-object-manage/resources/views/digitalobject/edit.blade.php
+
+openric-record-manage              record-part/create  create  3      59     57    1      !!
+  MISSING (in Heratio, not in OpenRiC): parent_id, level_of_description_id, extent_and_medium, _creatorsIncluded, repository_id, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, subjectAccessPointIds[], placeAccessPointIds[], genreAccessPointIds[], description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, publication_status_id, display_standard_id, security_classification_id, events[, altIds[, notes[, publicationNotes[, archivistNotes[, alternate_title, edition, source_standard, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, collection_type_id, updateDescendants, childLevels[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  EXTRA (in OpenRiC, not in Heratio):   parent_iri
+  OpenRiC fields: title, identifier, parent_iri
+  Heratio fields: parent_id, identifier, title, level_of_description_id, extent_and_medium, _creatorsIncluded, repository_id, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, subjectAccessPointIds[], placeAccessPointIds[], genreAccessPointIds[], description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, publication_status_id, display_standard_id, security_classification_id, events[, altIds[, notes[, publicationNotes[, archivistNotes[, alternate_title, edition, source_standard, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, collection_type_id, updateDescendants, childLevels[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  Heratio: ahg-information-object-manage/resources/views/create.blade.php, ahg-information-object-manage/resources/views/edit.blade.php, ahg-information-object-manage/resources/views/digitalobject/edit.blade.php
+
+openric-record-manage              record/edit         edit    2      54     52    0      !!
+  MISSING (in Heratio, not in OpenRiC): alternate_title, edition, level_of_description_id, extent_and_medium, _creatorsIncluded, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, source_standard, security_classification_id, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, publication_status_id, collection_type_id, display_standard_id, updateDescendants, events[, altIds[, childLevels[, notes[, publicationNotes[, archivistNotes[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  OpenRiC fields: title, identifier
+  Heratio fields: identifier, title, alternate_title, edition, level_of_description_id, extent_and_medium, _creatorsIncluded, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, source_standard, security_classification_id, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, publication_status_id, collection_type_id, display_standard_id, updateDescendants, events[, altIds[, childLevels[, notes[, publicationNotes[, archivistNotes[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  Heratio: ahg-information-object-manage/resources/views/edit.blade.php, ahg-information-object-manage/resources/views/digitalobject/edit.blade.php
+
+openric-record-manage              record/create       create  3      59     57    1      !!
+  MISSING (in Heratio, not in OpenRiC): parent_id, level_of_description_id, extent_and_medium, _creatorsIncluded, repository_id, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, subjectAccessPointIds[], placeAccessPointIds[], genreAccessPointIds[], description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, publication_status_id, display_standard_id, security_classification_id, events[, altIds[, notes[, publicationNotes[, archivistNotes[, alternate_title, edition, source_standard, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, collection_type_id, updateDescendants, childLevels[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  EXTRA (in OpenRiC, not in Heratio):   parent_iri
+  OpenRiC fields: title, identifier, parent_iri
+  Heratio fields: parent_id, identifier, title, level_of_description_id, extent_and_medium, _creatorsIncluded, repository_id, archival_history, acquisition, scope_and_content, appraisal, accruals, arrangement, access_conditions, reproduction_conditions, languages[], scripts[], language_notes, physical_characteristics, finding_aids, location_of_originals, location_of_copies, related_units_of_description, subjectAccessPointIds[], placeAccessPointIds[], genreAccessPointIds[], description_identifier, institution_responsible_identifier, rules, description_status_id, description_detail_id, revision_history, languagesOfDescription[], scriptsOfDescription[], sources, publication_status_id, display_standard_id, security_classification_id, events[, altIds[, notes[, publicationNotes[, archivistNotes[, alternate_title, edition, source_standard, security_reason, security_review_date, security_declassify_date, security_handling_instructions, security_inherit_to_children, collection_type_id, updateDescendants, childLevels[, mediaType, digitalObjectAltText, displayAsCompound, latitude, longitude
+  Heratio: ahg-information-object-manage/resources/views/create.blade.php, ahg-information-object-manage/resources/views/edit.blade.php, ahg-information-object-manage/resources/views/digitalobject/edit.blade.php
+
+openric-reports                    report-builder/edit edit    3      0      0     3      !!
+  EXTRA (in OpenRiC, not in Heratio):   name, description, category
+  OpenRiC fields: name, description, category
+  Heratio: ahg-reports/resources/views/report-builder/edit.blade.php
+
+openric-reports                    report-builder/createcreate  5      5      0     0      OK
+  Heratio: ahg-reports/resources/views/report-builder/create.blade.php, ahg-reports/resources/views/report-builder/edit.blade.php
+
+openric-repository                 edit                create  47     47     0     0      OK
+  Heratio: ahg-repository-manage/resources/views/edit.blade.php
+
+openric-request-publish            edit                edit    2      2      0     0      OK
+  Heratio: ahg-request-publish/resources/views/edit.blade.php
+
+openric-rights-holder-manage       edit                create  1      1      0     0      OK
+  Heratio: ahg-rights-holder-manage/resources/views/edit.blade.php
+
+openric-rights-holder-manage       embargo/add         create  10     11     1     0      !!
+  MISSING (in Heratio, not in OpenRiC): authorized_form_of_name
+  OpenRiC fields: embargo_type, start_date, end_date, is_perpetual, reason, public_message, notes, apply_to_children, notify_on_expiry, notify_days_before
+  Heratio fields: embargo_type, start_date, end_date, is_perpetual, reason, public_message, notes, apply_to_children, notify_on_expiry, notify_days_before, authorized_form_of_name
+  Heratio: ahg-rights-holder-manage/resources/views/embargo/add.blade.php, ahg-rights-holder-manage/resources/views/edit.blade.php
+
+openric-rights                     rightsHolder/edit   edit    3      0      0     3      !!
+  EXTRA (in OpenRiC, not in Heratio):   name, description_identifier, entity_iri
+  OpenRiC fields: name, description_identifier, entity_iri
+  Heratio: NO EQUIVALENT
+
+openric-rights                     embargo/add         create  7      0      0     7      !!
+  EXTRA (in OpenRiC, not in Heratio):   entity_iri, embargo_start, embargo_end, is_perpetual, reason, public_message, notes
+  OpenRiC fields: entity_iri, embargo_start, embargo_end, is_perpetual, reason, public_message, notes
+  Heratio: NO EQUIVALENT
+
+openric-static-page                edit                edit    3      3      0     0      OK
+  Heratio: ahg-static-page/resources/views/edit.blade.php
+
+openric-storage-manage             edit                create  30     30     0     0      OK
+  Heratio: ahg-storage-manage/resources/views/edit.blade.php
+
+openric-term-taxonomy              edit                edit    11     11     0     0      OK
+  Heratio: ahg-term-taxonomy/resources/views/edit.blade.php
+
+openric-user-manage                edit                create  18     20     2     0      !!
+  MISSING (in Heratio, not in OpenRiC): restApiKey, oaiApiKey
+  OpenRiC fields: username, email, current_password, password, confirm_password, active, authorized_form_of_name, contact_telephone, contact_fax, contact_street_address, contact_city, contact_region, contact_postal_code, contact_country_code, contact_website, contact_note, groups[], translate[]
+  Heratio fields: username, email, current_password, password, confirm_password, active, authorized_form_of_name, contact_telephone, contact_fax, contact_street_address, contact_city, contact_region, contact_postal_code, contact_country_code, contact_website, contact_note, groups[], translate[], restApiKey, oaiApiKey
+  Heratio: ahg-user-manage/resources/views/edit.blade.php
+
+openric-vendor                     edit                unknown 0      0      0     0      OK
+  Heratio: ahg-vendor/resources/views/edit.blade.php
+
+openric-vendor                     add                 unknown 0      0      0     0      OK
+  Heratio: ahg-vendor/resources/views/add.blade.php, ahg-vendor/resources/views/edit.blade.php
+
+
+## MOST COMMONLY MISSING FIELDS
+
+Field Name                    Count  Found In
+────────────────────────────────────────────────────────────────────────────────
+description_identifier        13     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...10 more
+institution_responsible_identifier13     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...10 more
+rules                         13     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...10 more
+description_status_id         13     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...10 more
+description_detail_id         13     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...10 more
+revision_history              13     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...10 more
+sources                       13     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...10 more
+source_standard               13     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...10 more
+parent_id                     11     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...8 more
+description                   10     openric-agent-manage/corporate-bodies/edit, openric-agent-manage/corporate-bodies/create, openric-agent-manage/persons/edit ...7 more
+reproduction_conditions       9      openric-gallery/gallery/edit, openric-gallery/gallery/add, openric-record-manage/condition/create ...6 more
+level_of_description_id       9      openric-dam/create, openric-library/library/add, openric-record-manage/condition/create ...6 more
+edition                       8      openric-library/library/add, openric-record-manage/condition/create, openric-record-manage/record-set/edit ...5 more
+extent_and_medium             8      openric-dam/create, openric-record-manage/condition/create, openric-record-manage/record-set/edit ...5 more
+archival_history              8      openric-accession/add, openric-record-manage/condition/create, openric-record-manage/record-set/edit ...5 more
+appraisal                     8      openric-accession/add, openric-record-manage/condition/create, openric-record-manage/record-set/edit ...5 more
+physical_characteristics      8      openric-accession/add, openric-record-manage/condition/create, openric-record-manage/record-set/edit ...5 more
+events[                       8      openric-accession/add, openric-record-manage/condition/create, openric-record-manage/record-set/edit ...5 more
+scope_and_content             8      openric-accession/add, openric-dam/create, openric-library/library/add ...5 more
+_creatorsIncluded             7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+acquisition                   7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+accruals                      7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+arrangement                   7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+access_conditions             7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+languages[]                   7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+scripts[]                     7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+language_notes                7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+finding_aids                  7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+location_of_originals         7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+location_of_copies            7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+related_units_of_description  7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+languagesOfDescription[]      7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+scriptsOfDescription[]        7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+publication_status_id         7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+display_standard_id           7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+security_classification_id    7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+altIds[                       7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+notes[                        7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+publicationNotes[             7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+archivistNotes[               7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+alternate_title               7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+security_reason               7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+security_review_date          7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+security_declassify_date      7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+security_handling_instructions7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+security_inherit_to_children  7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+collection_type_id            7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+updateDescendants             7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+childLevels[                  7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+mediaType                     7      openric-record-manage/condition/create, openric-record-manage/record-set/edit, openric-record-manage/record-set/create ...4 more
+
+# END OF FIELD PARITY CHECK

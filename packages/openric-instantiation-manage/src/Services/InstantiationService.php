@@ -59,7 +59,7 @@ class InstantiationService implements InstantiationServiceInterface
                 {$filterClauses}
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, $bindings);
@@ -167,7 +167,7 @@ class InstantiationService implements InstantiationServiceInterface
                 OPTIONAL { ?iri rico:dateOfInstantiation ?dateOfInstantiation }
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, [

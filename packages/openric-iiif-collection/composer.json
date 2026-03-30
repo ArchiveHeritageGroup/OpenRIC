@@ -1,0 +1,24 @@
+{
+    "name": "openric/iiif-collection",
+    "description": "IIIF Presentation API 3.0 support for OpenRiC — generates IIIF Collections, Manifests, and Canvases from RiC-O instantiations",
+    "type": "library",
+    "license": "AGPL-3.0",
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\IiifCollection\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\IiifCollection\\Providers\\IiifCollectionServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

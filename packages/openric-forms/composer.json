@@ -1,0 +1,17 @@
+{
+    "name": "openric/forms",
+    "description": "OpenRiC Forms package (form template builder)",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\Forms\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\Forms\\Providers\\OpenRicFormsServiceProvider"
+            ]
+        }
+    }
+}

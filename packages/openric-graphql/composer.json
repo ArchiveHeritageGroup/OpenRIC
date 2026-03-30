@@ -1,0 +1,20 @@
+{
+    "name": "openric/graphql",
+    "description": "OpenRiC GraphQL package with playground for querying the archive",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\Graphql\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\Graphql\\Providers\\GraphqlServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

@@ -1,0 +1,20 @@
+{
+    "name": "openric/pdf-tools",
+    "description": "PDF text extraction and TIFF/PDF merging tools for OpenRiC",
+    "type": "library",
+    "require": {
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRicPdfTools\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRicPdfTools\\Providers\\OpenRicPdfToolsServiceProvider"
+            ]
+        }
+    }
+}

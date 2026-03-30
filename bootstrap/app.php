@@ -14,7 +14,15 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->alias([
+            'auth.required' => \App\Http\Middleware\Authenticate::class,
+        ]);
+
+        // Append locale + view-switch after session start in the web group
+        $middleware->appendToGroup('web', [
+            \OpenRiC\Theme\Http\Middleware\SetLocaleMiddleware::class,
+            \OpenRiC\Theme\Http\Middleware\ViewSwitchMiddleware::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->renderable(function (TriplestoreException $e) {

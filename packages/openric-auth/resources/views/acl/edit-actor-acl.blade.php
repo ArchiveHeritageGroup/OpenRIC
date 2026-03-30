@@ -1,0 +1,1 @@
+@include('openric-auth::acl._acl-actor', ['resource' => $resource ?? (object)[], 'basicActions' => $basicActions ?? [], 'actors' => $actors ?? [], 'rootActor' => $rootActor ?? (object)['id' => 0], 'actorObjects' => $actorObjects ?? []])

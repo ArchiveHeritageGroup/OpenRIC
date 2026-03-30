@@ -1,0 +1,16 @@
+{
+    "name": "openric/dc-manage",
+    "description": "OpenRiC DC Manage package (Dublin Core metadata management)",
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\DcManage\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\DcManage\\Providers\\OpenRicDcManageServiceProvider"
+            ]
+        }
+    }
+}

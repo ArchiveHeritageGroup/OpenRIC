@@ -1,0 +1,16 @@
+{
+    "name": "openric/api-plugin",
+    "description": "OpenRiC ApiPlugin package",
+    "autoload": {
+        "psr-4": {
+            "OpenRicApiPlugin\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRicApiPlugin\\Providers\\OpenRicApiPluginServiceProvider"
+            ]
+        }
+    }
+}

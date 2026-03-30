@@ -1,0 +1,17 @@
+{
+    "name": "openric/federation",
+    "description": "OpenRiC Federation package (OAI-PMH peer harvesting)",
+    "type": "library",
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\Federation\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\Federation\\Providers\\OpenRicFederationServiceProvider"
+            ]
+        }
+    }
+}

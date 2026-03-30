@@ -65,7 +65,7 @@ class FacetedBrowseService implements FacetedBrowseServiceInterface
                 {$filterBlock}
             }
             ORDER BY {$orderBy}
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, $filterParams);

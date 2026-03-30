@@ -1,0 +1,10 @@
+@extends('theme::layouts.1col')
+@section('title', 'Watermark Settings')
+@section('content')
+<h1>Watermark Settings</h1>
+<form method="post" action="{{ route('acl.watermark-settings-store') }}" enctype="multipart/form-data">@csrf
+<div class="card mb-4"><div class="card-header"><h5 class="mb-0">Default Watermark</h5></div><div class="card-body"><div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="default_watermark_enabled" name="default_watermark_enabled" value="1"><label class="form-check-label" for="default_watermark_enabled"><strong>Enable default watermark</strong></label></div><small class="text-muted">Apply watermark to all images by default.</small></div></div></div>
+<div class="card mb-4"><div class="card-header"><h5 class="mb-0">Application Settings</h5></div><div class="card-body"><div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="apply_watermark_on_view" name="apply_watermark_on_view" value="1"><label class="form-check-label" for="apply_watermark_on_view">Apply watermark when viewing images</label></div></div><div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="apply_watermark_on_download" name="apply_watermark_on_download" value="1"><label class="form-check-label" for="apply_watermark_on_download">Apply watermark on download</label></div></div><div class="mb-3"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="security_watermark_override" name="security_watermark_override" value="1"><label class="form-check-label" for="security_watermark_override">Security classification overrides default</label></div></div></div></div>
+<div class="actions"><button type="submit" class="btn btn-primary"><i class="bi bi-save me-1"></i> Save Settings</button><a href="{{ route('settings.index') }}" class="btn btn-secondary"><i class="bi bi-arrow-left me-1"></i>Back</a></div>
+</form>
+@endsection

@@ -50,3 +50,23 @@ Route::post('/admin/{id}/delete', [WorkflowController::class, 'deleteWorkflow'])
 // Admin: step management
 Route::post('/admin/{workflowId}/step', [WorkflowController::class, 'addStep'])->name('workflow.admin.step.add')->where('workflowId', '[0-9]+');
 Route::post('/admin/step/{id}/delete', [WorkflowController::class, 'deleteStep'])->name('workflow.admin.step.delete')->where('id', '[0-9]+');
+
+// Admin: publish gates
+Route::get('/admin/gates', [WorkflowController::class, 'gateAdmin'])->name('workflow.gates.admin');
+Route::match(['get', 'post'], '/admin/gates/edit/{id?}', [WorkflowController::class, 'gateRuleEdit'])->name('workflow.gates.edit');
+Route::post('/admin/gates/{id}/delete', [WorkflowController::class, 'deleteGateRule'])->name('workflow.gates.delete')->where('id', '[0-9]+');
+
+// History
+Route::get('/history', [WorkflowController::class, 'history'])->name('workflow.history');
+
+// Queues
+Route::get('/queues', [WorkflowController::class, 'queues'])->name('workflow.queues');
+
+// Additional views
+Route::match(['get', 'post'], '/admin/{workflowId}/step/add-form', [WorkflowController::class, 'addStepForm'])->name('workflow.admin.step.add-form')->where('workflowId', '[0-9]+');
+Route::match(['get', 'post'], '/admin/step/{id}/edit-form', [WorkflowController::class, 'editStepForm'])->name('workflow.admin.step.edit-form')->where('id', '[0-9]+');
+Route::get('/bulk-preview', [WorkflowController::class, 'bulkPreview'])->name('workflow.bulk-preview');
+Route::get('/my-work', [WorkflowController::class, 'myWork'])->name('workflow.my-work');
+Route::get('/publish-simulate/{objectId}', [WorkflowController::class, 'publishSimulate'])->name('workflow.publish-simulate')->whereNumber('objectId');
+Route::get('/team-work', [WorkflowController::class, 'teamWork'])->name('workflow.team-work');
+Route::get('/timeline/{id}', [WorkflowController::class, 'timeline'])->name('workflow.timeline')->whereNumber('id');

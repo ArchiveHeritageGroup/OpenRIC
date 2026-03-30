@@ -12,7 +12,7 @@ use OpenRiC\Accession\Services\AccessionService;
 /**
  * Service provider for the openric-accession package.
  *
- * Adapted from Heratio AhgAccessionManageServiceProvider which registers
+ * Adapted from Heratio OpenRic\AccessionServiceProvider which registers
  * routes and views. OpenRiC additionally registers the service singleton.
  */
 class AccessionServiceProvider extends ServiceProvider

@@ -65,6 +65,7 @@ class RecordController extends Controller
         return view('record-manage::record.index', [
             'items' => $result['items'],
             'total' => $result['total'],
+            'offset' => $offset,
             'facets' => $result['facets'] ?? [],
             'page' => $page,
             'limit' => $limit,

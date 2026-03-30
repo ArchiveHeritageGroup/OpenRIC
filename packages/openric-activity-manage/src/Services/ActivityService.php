@@ -57,7 +57,7 @@ class ActivityService implements ActivityServiceInterface
                 {$filterClauses}
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, $bindings);
@@ -170,7 +170,7 @@ class ActivityService implements ActivityServiceInterface
                 OPTIONAL { ?iri rico:endDate ?endDate }
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, [
@@ -209,7 +209,7 @@ class ActivityService implements ActivityServiceInterface
                 OPTIONAL { ?iri rico:endDate ?endDate }
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, [

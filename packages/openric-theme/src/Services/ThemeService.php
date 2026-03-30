@@ -61,11 +61,20 @@ class ThemeService implements ThemeServiceInterface
 
             // Theme settings
             'primaryColor' => $this->settings->getString('theme', 'primary_color', '#1a5276'),
+            'headerBackgroundColor' => $this->settings->getString('theme', 'header_bg', '#212529'),
             'sidebarCollapsed' => $this->settings->getBool('theme', 'sidebar_collapsed', false),
             'displayMode' => $this->settings->getString('theme', 'display_mode', 'list'),
             'logoPath' => $this->settings->getString('theme', 'logo_path', ''),
             'footerText' => $this->settings->getString('theme', 'footer_text', '© OpenRiC — Records in Contexts'),
             'showBranding' => true,
+
+            // UI toggles (from Heratio)
+            'toggleLogo' => $this->settings->getBool('theme', 'toggle_logo', true),
+            'toggleDescription' => $this->settings->getBool('theme', 'toggle_description', true),
+            'toggleIoSlider' => $this->settings->getBool('theme', 'toggle_io_slider', true),
+            'toggleLanguageMenu' => $this->settings->getBool('theme', 'toggle_language_menu', true),
+            'toggleCopyrightFilter' => $this->settings->getBool('theme', 'toggle_copyright_filter', true),
+            'toggleMaterialFilter' => $this->settings->getBool('theme', 'toggle_material_filter', true),
 
             // View mode
             'currentViewMode' => $this->getCurrentViewMode(),
@@ -199,6 +208,49 @@ class ThemeService implements ThemeServiceInterface
         }
 
         return config('openric.version', '0.1.0');
+    }
+
+    /**
+     * Get languages enabled in admin settings for the nav dropdown.
+     *
+     * Reads from settings table (group = i18n_languages). Falls back to
+     * scanning all lang/ directories if nothing has been configured yet.
+     */
+    public function getEnabledLanguages(): array
+    {
+        try {
+            $rows = DB::table('settings')
+                ->where('group', 'i18n_languages')
+                ->pluck('value', 'key')
+                ->map(fn ($v) => json_decode($v, true))
+                ->filter(fn ($v) => !empty($v['enabled']))
+                ->sortKeys()
+                ->toArray();
+
+            if (!empty($rows)) {
+                return $rows;
+            }
+        } catch (\Exception) {
+            // Table may not exist yet during initial setup
+        }
+
+        // Fallback: show all available lang/ directories
+        $dirs = array_filter(
+            array_map('basename', glob(lang_path('*'), GLOB_ONLYDIR) ?: []),
+            fn (string $d) => preg_match('/^[a-z]{2}(_[A-Z]{2})?(@\w+)?$/', $d)
+        );
+        sort($dirs);
+
+        $result = [];
+        foreach ($dirs as $code) {
+            $result[$code] = [
+                'name'      => ucfirst(\Locale::getDisplayLanguage($code, $code)),
+                'enabled'   => true,
+                'direction' => in_array($code, ['ar', 'fa', 'he', 'ur'], true) ? 'rtl' : 'ltr',
+            ];
+        }
+
+        return $result;
     }
 
     /**

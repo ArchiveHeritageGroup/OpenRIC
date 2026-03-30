@@ -1,0 +1,21 @@
+{
+    "name": "openric/cart",
+    "description": "Digital marketplace & shopping cart for OpenRiC",
+    "type": "library",
+    "require": {
+        "openric/triplestore": "@dev",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\Cart\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\Cart\\Providers\\CartServiceProvider"
+            ]
+        }
+    }
+}

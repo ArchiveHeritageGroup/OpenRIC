@@ -1,0 +1,23 @@
+{
+    "name": "openric/vendor",
+    "description": "OpenRiC Vendor package for vendor management and transactions",
+    "type": "library",
+    "license": "AGPL-3.0-or-later",
+    "require": {
+        "php": "^8.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\Vendor\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\Vendor\\Providers\\VendorServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

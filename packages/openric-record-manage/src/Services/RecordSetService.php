@@ -15,7 +15,7 @@ class RecordSetService implements RecordSetServiceInterface
 
     public function browse(array $filters = [], int $limit = 25, int $offset = 0): array
     {
-        $sparql = <<<'SPARQL'
+        $sparql = <<<SPARQL
             SELECT ?iri ?title ?identifier ?level WHERE {
                 ?iri a rico:RecordSet .
                 ?iri rico:title ?title .
@@ -23,13 +23,10 @@ class RecordSetService implements RecordSetServiceInterface
                 OPTIONAL { ?iri rico:hasRecordSetType ?level }
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
-        $items = $this->triplestore->select($sparql, [
-            'limit' => (string) $limit,
-            'offset' => (string) $offset,
-        ]);
+        $items = $this->triplestore->select($sparql);
 
         $countSparql = <<<'SPARQL'
             SELECT (COUNT(?iri) AS ?count) WHERE {

@@ -22,7 +22,8 @@ class RequireAdmin
             abort(403, 'Insufficient permissions');
         }
 
-        if (! $this->aclService->canAdmin(Auth::id())) {
+        $userId = Auth::id();
+        if (! $userId || ! $this->aclService->canAdmin($userId)) {
             abort(403, 'Insufficient permissions');
         }
 

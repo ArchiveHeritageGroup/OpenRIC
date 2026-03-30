@@ -1,0 +1,21 @@
+{
+    "name": "openric/api",
+    "description": "REST API v1/v2 for OpenRiC with RiC-O data model",
+    "type": "library",
+    "require": {
+        "openric/triplestore": "@dev",
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\Api\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\Api\\Providers\\ApiServiceProvider"
+            ]
+        }
+    }
+}

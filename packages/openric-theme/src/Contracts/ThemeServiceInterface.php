@@ -44,4 +44,14 @@ interface ThemeServiceInterface
      * @return string 'ric', 'traditional', or 'graph'
      */
     public function getCurrentViewMode(): string;
+
+    /**
+     * Get languages enabled in admin settings for the nav dropdown.
+     *
+     * Returns an array keyed by locale code, e.g. ['en' => ['name' => 'English', 'enabled' => true, 'direction' => 'ltr'], ...]
+     * Falls back to all lang/ directories if nothing is configured.
+     *
+     * @return array<string, array{name: string, enabled: bool, direction: string}>
+     */
+    public function getEnabledLanguages(): array;
 }

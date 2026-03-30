@@ -1,7 +1,7 @@
 @if(isset($breadcrumbs) && count($breadcrumbs) > 0)
 <nav aria-label="Breadcrumb">
     <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="{{ route('home') }}">Home</a></li>
+        <li class="breadcrumb-item"><a href="/">Home</a></li>
         @foreach($breadcrumbs as $crumb)
             @if($loop->last)
                 <li class="breadcrumb-item active" aria-current="page">{{ $crumb['label'] }}</li>

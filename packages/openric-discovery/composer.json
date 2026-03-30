@@ -1,0 +1,16 @@
+{
+    "name": "openric/discovery",
+    "description": "OpenRiC Discovery package (unified search and discovery)",
+    "autoload": {
+        "psr-4": {
+            "OpenRic\\Discovery\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRic\\Discovery\\Providers\\OpenRicDiscoveryServiceProvider"
+            ]
+        }
+    }
+}

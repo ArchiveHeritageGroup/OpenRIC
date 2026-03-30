@@ -218,4 +218,207 @@ class DedupeController extends Controller
                 ? 'Records merged successfully.'
                 : 'Marked as not duplicate.');
     }
+
+    // =====================================================================
+    //  Scan — start a new duplicate scan.
+    //  Adapted from Heratio DedupeController::scan() and scanStart().
+    // =====================================================================
+
+    public function scan()
+    {
+        return view('openric-dedupe::scan');
+    }
+
+    public function scanStart(Request $request)
+    {
+        $entityType = $request->input('entity_type', 'RecordSet');
+        $threshold = (float) $request->input('threshold', 0.7);
+        $limit = (int) $request->input('limit', 100);
+
+        if ($entityType === 'all') {
+            $this->service->findDuplicates(['entityType' => 'RecordSet', 'threshold' => $threshold, 'limit' => $limit]);
+            $this->service->findDuplicateAgents(['threshold' => $threshold, 'limit' => $limit]);
+        } elseif ($entityType === 'Agent') {
+            $this->service->findDuplicateAgents(['threshold' => $threshold, 'limit' => $limit]);
+        } else {
+            $this->service->findDuplicates(['entityType' => $entityType, 'threshold' => $threshold, 'limit' => $limit]);
+        }
+
+        return redirect()->route('dedupe.dashboard')
+            ->with('success', 'Scan completed. Check the dashboard for results.');
+    }
+
+    // =====================================================================
+    //  Rules — list, create, store, edit, update, delete detection rules.
+    //  Adapted from Heratio DedupeController rule methods.
+    // =====================================================================
+
+    public function rules()
+    {
+        $rules = $this->service->getRules();
+        return view('openric-dedupe::rules', ['rules' => $rules]);
+    }
+
+    public function ruleCreate()
+    {
+        return view('openric-dedupe::rule-create', ['ruleTypes' => $this->service->getRuleTypes()]);
+    }
+
+    public function ruleStore(Request $request)
+    {
+        $request->validate([
+            'name'      => 'required|string|max:255',
+            'rule_type' => 'required|string|max:50',
+            'threshold' => 'required|numeric|min:0|max:1',
+        ]);
+
+        $this->service->storeRule([
+            'name'        => $request->input('name'),
+            'rule_type'   => $request->input('rule_type'),
+            'threshold'   => (float) $request->input('threshold'),
+            'priority'    => (int) $request->input('priority', 100),
+            'config_json' => $request->input('config_json') ?: null,
+            'is_enabled'  => $request->has('is_enabled') ? 1 : 0,
+            'is_blocking' => $request->has('is_blocking') ? 1 : 0,
+        ]);
+
+        return redirect()->route('dedupe.rules')->with('success', 'Detection rule created.');
+    }
+
+    public function ruleEdit(int $id)
+    {
+        $rule = $this->service->getRule($id);
+        if (!$rule) {
+            abort(404);
+        }
+        return view('openric-dedupe::rule-edit', [
+            'rule'      => $rule,
+            'ruleTypes' => $this->service->getRuleTypes(),
+        ]);
+    }
+
+    public function ruleUpdate(Request $request, int $id)
+    {
+        $request->validate([
+            'name'      => 'required|string|max:255',
+            'rule_type' => 'required|string|max:50',
+            'threshold' => 'required|numeric|min:0|max:1',
+        ]);
+
+        $this->service->updateRule($id, [
+            'name'        => $request->input('name'),
+            'rule_type'   => $request->input('rule_type'),
+            'threshold'   => (float) $request->input('threshold'),
+            'priority'    => (int) $request->input('priority', 100),
+            'config_json' => $request->input('config_json') ?: null,
+            'is_enabled'  => $request->has('is_enabled') ? 1 : 0,
+            'is_blocking' => $request->has('is_blocking') ? 1 : 0,
+        ]);
+
+        return redirect()->route('dedupe.rules')->with('success', 'Detection rule updated.');
+    }
+
+    public function ruleDelete(int $id)
+    {
+        $this->service->deleteRule($id);
+        return redirect()->route('dedupe.rules')->with('success', 'Detection rule deleted.');
+    }
+
+    // =====================================================================
+    //  Report — monthly stats and method breakdown.
+    //  Adapted from Heratio DedupeController::report().
+    // =====================================================================
+
+    public function report()
+    {
+        $reportData = $this->service->getReportData();
+
+        return view('openric-dedupe::report', [
+            'monthlyStats'    => $reportData['monthlyStats'] ?? [],
+            'methodBreakdown' => $reportData['methodBreakdown'] ?? [],
+            'efficiency'      => $reportData['efficiency'] ?? [],
+            'topClusters'     => $reportData['topClusters'] ?? [],
+        ]);
+    }
+
+    // =====================================================================
+    //  API: Real-time duplicate check during data entry.
+    //  Adapted from Heratio DedupeController::apiRealtime().
+    // =====================================================================
+
+    public function apiRealtime(Request $request)
+    {
+        $title = (string) $request->query('title', '');
+        if (strlen($title) < 5) {
+            return response()->json(['matches' => []]);
+        }
+
+        $matches = $this->service->realtimeCheck($title, 10);
+        return response()->json(['matches' => $matches]);
+    }
+
+    // =====================================================================
+    //  Authority-related views.
+    //  Adapted from Heratio DedupeController authority endpoints.
+    // =====================================================================
+
+    public function config(Request $request)
+    {
+        return view('openric-dedupe::config', ['record' => (object) []]);
+    }
+
+    public function contact(int $id)
+    {
+        $record = \DB::table('agents')
+            ->leftJoin('agent_i18n', 'agents.id', '=', 'agent_i18n.agent_id')
+            ->where('agents.id', $id)
+            ->first();
+        return view('openric-dedupe::contact', ['record' => $record ?? (object) []]);
+    }
+
+    public function authorityDashboard()
+    {
+        $stats = $this->service->getAuthorityStats();
+        return view('openric-dedupe::authority-dashboard', $stats);
+    }
+
+    public function functionBrowse(Request $request)
+    {
+        $params = $request->only(['page', 'limit', 'query']);
+        $result = $this->service->browseFunctions($params);
+        return view('openric-dedupe::function-browse', ['rows' => collect($result['hits'] ?? [])]);
+    }
+
+    public function functions(int $id)
+    {
+        $functions = $this->service->getAgentFunctions($id);
+        return view('openric-dedupe::functions', ['rows' => collect($functions)]);
+    }
+
+    public function identifiers(Request $request)
+    {
+        $params = $request->only(['page', 'limit', 'query']);
+        $result = $this->service->getAuthorityIdentifiers($params);
+        return view('openric-dedupe::identifiers', ['rows' => collect($result['hits'] ?? [])]);
+    }
+
+    public function occupations(Request $request)
+    {
+        $params = $request->only(['page', 'limit', 'query']);
+        $result = $this->service->getAuthorityOccupations($params);
+        return view('openric-dedupe::occupations', ['rows' => collect($result['hits'] ?? [])]);
+    }
+
+    public function split(Request $request, int $id)
+    {
+        $authority = $this->service->getAuthority($id);
+        return view('openric-dedupe::split', ['authority' => $authority ? (object) $authority : (object) []]);
+    }
+
+    public function workqueue(Request $request)
+    {
+        $params = $request->only(['page', 'limit', 'status']);
+        $result = $this->service->getWorkQueue($params);
+        return view('openric-dedupe::workqueue', ['rows' => collect($result['hits'] ?? [])]);
+    }
 }

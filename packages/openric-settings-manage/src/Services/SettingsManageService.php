@@ -40,6 +40,16 @@ class SettingsManageService implements SettingsManageServiceInterface
 
     public function saveSetting(string $name, ?string $scope, string $value, string $culture = 'en'): void
     {
+        // For OpenRiC settings with a group (e.g., 'theme'), use the 'settings' table
+        if ($scope !== null && $scope !== '') {
+            DB::table('settings')->updateOrInsert(
+                ['group' => $scope, 'key' => $name],
+                ['value' => $value, 'updated_at' => now()]
+            );
+            return;
+        }
+
+        // For AtoM-style settings without a group, use the 'setting' table
         $query = DB::table('setting')->where('name', $name);
         if ($scope === null) {
             $query->whereNull('scope');

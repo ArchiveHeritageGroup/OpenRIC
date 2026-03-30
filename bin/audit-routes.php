@@ -22,7 +22,7 @@ foreach ($argv as $arg) {
 $baseUrl = rtrim($baseUrl, '/');
 
 // Get all routes from artisan
-$routeOutput = shell_exec('php artisan route:list --json 2>/dev/null');
+$routeOutput = shell_exec('php ' . __DIR__ . '/lib/route-extract.php --app /usr/share/nginx/OpenRiC 2>/dev/null');
 $routes = json_decode($routeOutput ?: '[]', true);
 
 $results = [];

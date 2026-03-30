@@ -1,0 +1,20 @@
+{
+    "name": "openric/ric",
+    "description": "Records in Contexts (RiC-O) integration for OpenRiC",
+    "type": "library",
+    "require": {
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRicRic\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRicRic\\Providers\\OpenRicRicServiceProvider"
+            ]
+        }
+    }
+}

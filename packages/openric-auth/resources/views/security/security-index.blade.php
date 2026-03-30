@@ -1,0 +1,9 @@
+@extends('theme::layouts.1col')
+@section('title', 'User Security Clearances')
+@section('content')
+<div class="container mt-4"><div class="row"><div class="col-12">
+<nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{{ url('/') }}">Home</a></li><li class="breadcrumb-item"><a href="{{ route('acl.security-dashboard') }}">Security</a></li><li class="breadcrumb-item active">Security Clearances</li></ol></nav>
+@include('theme::partials.alerts')
+<div class="card"><div class="card-header bg-dark text-white d-flex justify-content-between align-items-center"><h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>User Security Clearances</h5></div><div class="card-body p-0"><div class="table-responsive"><table class="table table-hover mb-0"><thead class="table-light"><tr><th>User</th><th>Clearance Level</th><th>Granted</th><th>Expires</th><th>Actions</th></tr></thead><tbody>@foreach($clearances ?? [] as $user)<tr><td><strong>{{ e($user->username ?? '') }}</strong><br><small class="text-muted">{{ e($user->email ?? '') }}</small></td><td>@if($user->classification_name ?? null)<span class="badge bg-{{ ($user->classification_level ?? 0) >= 4 ? 'danger' : (($user->classification_level ?? 0) >= 2 ? 'warning' : 'success') }} fs-6">{{ e($user->classification_name) }}</span>@else<span class="badge bg-secondary">No Clearance</span>@endif</td><td>{{ ($user->granted_at ?? null) ? date('M j, Y', strtotime($user->granted_at)) : '-' }}</td><td>{{ ($user->expires_at ?? null) ? date('M j, Y', strtotime($user->expires_at)) : 'Never' }}</td><td><a href="{{ route('acl.view-classification', ['id' => $user->id ?? 0]) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a></td></tr>@endforeach</tbody></table></div></div></div>
+</div></div></div>
+@endsection

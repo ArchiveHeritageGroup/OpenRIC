@@ -59,6 +59,7 @@
             ['route' => 'settings.error-log', 'icon' => 'fa-exclamation-triangle', 'label' => 'Error Log'],
             ['route' => 'settings.email', 'icon' => 'fa-envelope', 'label' => 'Email Settings'],
             ['route' => 'settings.security', 'icon' => 'fa-shield-alt', 'label' => 'Security'],
+            ['route' => 'settings.plugins', 'icon' => 'fa-plug', 'label' => 'Plugins'],
         ] as $link)
         <div class="col-md-2 mb-3">
             <a href="{{ route($link['route']) }}" class="btn btn-outline-secondary w-100 py-3">

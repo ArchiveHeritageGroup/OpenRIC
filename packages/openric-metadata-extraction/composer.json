@@ -1,0 +1,20 @@
+{
+    "name": "openric/metadata-extraction",
+    "description": "Metadata extraction from digital objects for OpenRiC",
+    "type": "library",
+    "require": {
+        "openric/core": "@dev"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRicMetadataExtraction\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRicMetadataExtraction\\Providers\\OpenRicMetadataExtractionServiceProvider"
+            ]
+        }
+    }
+}

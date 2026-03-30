@@ -1,0 +1,612 @@
+========================================
+  OpenRiC — Missing Views Audit
+  Heratio: /usr/share/nginx/heratio/packages
+  OpenRiC: /usr/share/nginx/OpenRiC/packages
+========================================
+
+  Heratio packages: 90
+  Mapped packages:  90
+
+╔══════════════════════════════════════════════════╗
+║           MISSING VIEWS AUDIT                   ║
+╠══════════════════════════════════════════════════╣
+║  Total Heratio views    1862................   ║
+║  Existing in OpenRiC    1421................   ║
+║  MISSING from OpenRiC   441.................   ║
+║  Completeness           76.3..............%  ║
+╠══════════════════════════════════════════════════╣
+║  Unmapped Heratio pkgs  0...................   ║
+╚══════════════════════════════════════════════════╝
+
+=== PACKAGE SUMMARY ===
+
+  Heratio Package                     OpenRiC Package                Total  Have  Miss      %
+  ----------------------------------------------------------------------------------------------------------------
+  ahg-information-object-manage       openric-record-manage            115     4   111     3%
+  ahg-heritage-manage                 openric-heritage                  78     0    78     0%
+  ahg-acl                             openric-auth                      58    22    36    38%
+  ahg-actor-manage                    openric-agent-manage              32     0    32     0%
+  ahg-settings                        openric-settings-manage           72    43    29    60%
+  ahg-user-manage                     openric-user-manage               43    17    26    40%
+  ahg-theme-b5                        openric-theme                     36    16    20    44%
+  ahg-donor-manage                    openric-donor                     19     0    19     0%
+  ahg-research                        openric-research                 106    87    19    82%
+  ahg-spectrum                        openric-spectrum                  29    14    15    48%
+  ahg-repository-manage               openric-repository                16     3    13    19%
+  ahg-export                          openric-export                     7     0     7     0%
+  ahg-reports                         openric-reports                   53    47     6    89%
+  ahg-statistics                      openric-statistics                 9     3     6    33%
+  ahg-provenance                      openric-provenance                 5     0     5     0%
+  ahg-data-migration                  openric-data-migration            18    15     3    83%
+  ahg-static-page                     openric-static-page                6     3     3    50%
+  ahg-dedupe                          openric-dedupe                    24    22     2    92%
+  ahg-jobs-manage                     openric-jobs-manage                7     5     2    71%
+  ahg-accession-manage                openric-accession                 25    24     1    96%
+  ahg-backup                          openric-backup                     5     4     1    80%
+  ahg-exhibition                      openric-exhibition                13    12     1    92%
+  ahg-gallery                         openric-gallery                   26    25     1    96%
+  ahg-iiif-collection                 openric-digital-object            24    23     1    96%
+  ahg-integrity                       openric-integrity                 14    13     1    93%
+  ahg-label                           openric-label                      2     1     1    50%
+  ahg-search                          openric-search                    21    20     1    95%
+  ahg-translation                     openric-translation                4     3     1    75%
+  ahg-3d-model                        openric-3d-model                  11    11     0   100%
+  ahg-access-request                  openric-access-request             9     9     0   100%
+  ahg-ai-services                     openric-ai-services               40    40     0   100%
+  ahg-api-plugin                      openric-api-plugin                 1     1     0   100%
+  ahg-audit-trail                     openric-audit                     11    11     0   100%
+  ahg-cart                            openric-cart                      10    10     0   100%
+  ahg-cdpa                            openric-cdpa                      20    20     0   100%
+  ahg-condition                       openric-condition                 10    10     0   100%
+  ahg-core                            openric-core                      41    41     0   100%
+  ahg-custom-fields                   openric-custom-fields              5     5     0   100%
+  ahg-dacs-manage                     openric-dacs-manage                1     1     0   100%
+  ahg-dam                             openric-dam                       19    19     0   100%
+  ahg-dc-manage                       openric-dc-manage                  1     1     0   100%
+  ahg-discovery                       openric-discovery                  1     1     0   100%
+  ahg-display                         openric-display                   43    43     0   100%
+  ahg-doi-manage                      openric-doi-manage                11    11     0   100%
+  ahg-dropdown-manage                 openric-dropdown-manage            2     2     0   100%
+  ahg-extended-rights                 openric-extended-rights           25    25     0   100%
+  ahg-favorites                       openric-favorites                  4     4     0   100%
+  ahg-federation                      openric-federation                 6     6     0   100%
+  ahg-feedback                        openric-feedback                   6     6     0   100%
+  ahg-forms                           openric-forms                      9     9     0   100%
+  ahg-ftp-upload                      openric-ftp-upload                 1     1     0   100%
+  ahg-function-manage                 openric-function-manage            9     9     0   100%
+  ahg-gis                             openric-gis                        3     3     0   100%
+  ahg-graphql                         openric-graphql                    1     1     0   100%
+  ahg-help                            openric-help                       7     7     0   100%
+  ahg-icip                            openric-icip                      24    24     0   100%
+  ahg-ingest                          openric-ingest                     7     7     0   100%
+  ahg-ipsas                           openric-ipsas                     12    12     0   100%
+  ahg-landing-page                    openric-landing-page              31    31     0   100%
+  ahg-library                         openric-library                   35    35     0   100%
+  ahg-loan                            openric-loan                       7     7     0   100%
+  ahg-marketplace                     openric-marketplace               56    56     0   100%
+  ahg-media-processing                openric-media-processing           2     2     0   100%
+  ahg-menu-manage                     openric-menu-manage               13    13     0   100%
+  ahg-metadata-export                 openric-metadata-export            3     3     0   100%
+  ahg-metadata-extraction             openric-metadata-extraction        3     3     0   100%
+  ahg-mods-manage                     openric-mods-manage                1     1     0   100%
+  ahg-multi-tenant                    openric-multi-tenant               7     7     0   100%
+  ahg-museum                          openric-museum                    39    39     0   100%
+  ahg-naz                             openric-naz                       20    20     0   100%
+  ahg-nmmz                            openric-nmmz                      17    17     0   100%
+  ahg-pdf-tools                       openric-pdf-tools                  3     3     0   100%
+  ahg-portable-export                 openric-portable-export            2     2     0   100%
+  ahg-preservation                    openric-preservation              23    23     0   100%
+  ahg-privacy                         openric-privacy                   45    45     0   100%
+  ahg-rad-manage                      openric-rad-manage                 1     1     0   100%
+  ahg-registry                        openric-registry                 167   167     0   100%
+  ahg-request-publish                 openric-request-publish            6     6     0   100%
+  ahg-researcher-manage               openric-researcher-manage         16    16     0   100%
+  ahg-ric                             openric-ric                       13    13     0   100%
+  ahg-rights-holder-manage            openric-rights-holder-manage      38    38     0   100%
+  ahg-security-clearance              openric-security-clearance        26    26     0   100%
+  ahg-semantic-search                 openric-semantic-search           11    11     0   100%
+  ahg-storage-manage                  openric-storage-manage             9     9     0   100%
+  ahg-term-taxonomy                   openric-term-taxonomy             14    14     0   100%
+  ahg-vendor                          openric-vendor                    14    14     0   100%
+  ahg-workflow                        openric-workflow                  23    23     0   100%
+
+=== MISSING VIEWS BY PACKAGE ===
+
+  ahg-accession-manage => openric-accession  (1 missing of 25)
+    MISSING  partials/_physical-storage-context-menu.blade.php
+
+  ahg-acl => openric-auth  (36 missing of 58)
+    MISSING  _acl-actor.blade.php
+    MISSING  _acl-information-object.blade.php
+    MISSING  _acl-modal.blade.php
+    MISSING  _acl-repository.blade.php
+    MISSING  _acl-table.blade.php
+    MISSING  _show-actions.blade.php
+    MISSING  _tabs.blade.php
+    MISSING  _term-acl-form.blade.php
+    MISSING  access-denied.blade.php
+    MISSING  access-requests.blade.php
+    MISSING  approvers.blade.php
+    MISSING  audit-log.blade.php
+    MISSING  classifications.blade.php
+    MISSING  clearances.blade.php
+    MISSING  edit-actor-acl.blade.php
+    MISSING  edit-group.blade.php
+    MISSING  edit-information-object-acl.blade.php
+    MISSING  edit-repository-acl.blade.php
+    MISSING  edit-term-acl.blade.php
+    MISSING  edit.blade.php
+    MISSING  groups.blade.php
+    MISSING  my-requests.blade.php
+    MISSING  partials/access-badge.blade.php
+    MISSING  partials/badge.blade.php
+    MISSING  partials/classification-badge.blade.php
+    MISSING  partials/donor-restrictions.blade.php
+    MISSING  partials/search-result-badge.blade.php
+    MISSING  partials/security-badge.blade.php
+    MISSING  partials/security-fieldset.blade.php
+    MISSING  partials/user-badge.blade.php
+    MISSING  partials/warning-banner.blade.php
+    MISSING  partials/watermark-select.blade.php
+    MISSING  pending-requests.blade.php
+    MISSING  security-audit/dashboard.blade.php
+    MISSING  security-audit/index.blade.php
+    MISSING  security-audit/object-access.blade.php
+
+  ahg-actor-manage => openric-agent-manage  (32 missing of 32)
+    MISSING  _actor-search-result.blade.php
+    MISSING  _contact-view.blade.php
+    MISSING  _context-menu.blade.php
+    MISSING  _event.blade.php
+    MISSING  _related-authority-record.blade.php
+    MISSING  _search-result.blade.php
+    MISSING  authority/config.blade.php
+    MISSING  authority/contact.blade.php
+    MISSING  authority/dashboard.blade.php
+    MISSING  authority/dedup-compare.blade.php
+    MISSING  authority/dedup-index.blade.php
+    MISSING  authority/dedup-scan.blade.php
+    MISSING  authority/function-browse.blade.php
+    MISSING  authority/functions.blade.php
+    MISSING  authority/identifiers.blade.php
+    MISSING  authority/merge.blade.php
+    MISSING  authority/ner-index.blade.php
+    MISSING  authority/occupations.blade.php
+    MISSING  authority/partials/_completeness-badge.blade.php
+    MISSING  authority/partials/_completeness-panel.blade.php
+    MISSING  authority/partials/_identifier-panel.blade.php
+    MISSING  authority/partials/_relation-graph-panel.blade.php
+    MISSING  authority/split.blade.php
+    MISSING  authority/workqueue.blade.php
+    MISSING  browse.blade.php
+    MISSING  delete.blade.php
+    MISSING  edit.blade.php
+    MISSING  partials/_contact-area.blade.php
+    MISSING  partials/_other-names.blade.php
+    MISSING  print.blade.php
+    MISSING  rename.blade.php
+    MISSING  show.blade.php
+
+  ahg-backup => openric-backup  (1 missing of 5)
+    MISSING  restore-upload.blade.php
+
+  ahg-data-migration => openric-data-migration  (3 missing of 18)
+    MISSING  ahg-import-results.blade.php
+    MISSING  execute-ahg-import.blade.php
+    MISSING  execute.blade.php
+
+  ahg-dedupe => openric-dedupe  (2 missing of 24)
+    MISSING  browse.blade.php
+    MISSING  index.blade.php
+
+  ahg-donor-manage => openric-donor  (19 missing of 19)
+    MISSING  _agreement-form.blade.php
+    MISSING  _form.blade.php
+    MISSING  add.blade.php
+    MISSING  agreement-add.blade.php
+    MISSING  agreement-dashboard.blade.php
+    MISSING  agreement-delete.blade.php
+    MISSING  agreement-edit.blade.php
+    MISSING  agreement-reminders.blade.php
+    MISSING  agreement-view.blade.php
+    MISSING  browse.blade.php
+    MISSING  dashboard.blade.php
+    MISSING  delete.blade.php
+    MISSING  donor-index.blade.php
+    MISSING  donor-view.blade.php
+    MISSING  edit.blade.php
+    MISSING  index.blade.php
+    MISSING  reminders.blade.php
+    MISSING  show.blade.php
+    MISSING  view.blade.php
+
+  ahg-exhibition => openric-exhibition  (1 missing of 13)
+    MISSING  _object-list-csv.blade.php
+
+  ahg-export => openric-export  (7 missing of 7)
+    MISSING  accession-csv.blade.php
+    MISSING  archival.blade.php
+    MISSING  authority.blade.php
+    MISSING  csv.blade.php
+    MISSING  ead.blade.php
+    MISSING  index.blade.php
+    MISSING  repository.blade.php
+
+  ahg-gallery => openric-gallery  (1 missing of 26)
+    MISSING  gallery/create-artist.blade.php
+
+  ahg-heritage-manage => openric-heritage  (78 missing of 78)
+    MISSING  admin-access-requests.blade.php
+    MISSING  admin-branding.blade.php
+    MISSING  admin-config.blade.php
+    MISSING  admin-dashboard.blade.php
+    MISSING  admin-embargoes.blade.php
+    MISSING  admin-featured-collections.blade.php
+    MISSING  admin-features.blade.php
+    MISSING  admin-hero-slides.blade.php
+    MISSING  admin-popia.blade.php
+    MISSING  admin-users.blade.php
+    MISSING  analytics-alerts.blade.php
+    MISSING  analytics-content.blade.php
+    MISSING  analytics-dashboard.blade.php
+    MISSING  analytics-search.blade.php
+    MISSING  collections.blade.php
+    MISSING  contribute.blade.php
+    MISSING  contributor-login.blade.php
+    MISSING  contributor-profile.blade.php
+    MISSING  contributor-register.blade.php
+    MISSING  contributor-verify.blade.php
+    MISSING  creators.blade.php
+    MISSING  custodian-batch.blade.php
+    MISSING  custodian-dashboard.blade.php
+    MISSING  custodian-history.blade.php
+    MISSING  custodian-item.blade.php
+    MISSING  entity.blade.php
+    MISSING  explore.blade.php
+    MISSING  grap-compliance/batch-check.blade.php
+    MISSING  grap-compliance/check.blade.php
+    MISSING  grap-compliance/dashboard.blade.php
+    MISSING  grap-compliance/national-treasury-report.blade.php
+    MISSING  graph.blade.php
+    MISSING  heritage-accounting/add-impairment.blade.php
+    MISSING  heritage-accounting/add-journal.blade.php
+    MISSING  heritage-accounting/add-movement.blade.php
+    MISSING  heritage-accounting/add-valuation.blade.php
+    MISSING  heritage-accounting/add.blade.php
+    MISSING  heritage-accounting/browse.blade.php
+    MISSING  heritage-accounting/dashboard.blade.php
+    MISSING  heritage-accounting/edit.blade.php
+    MISSING  heritage-accounting/settings.blade.php
+    MISSING  heritage-accounting/view-by-object.blade.php
+    MISSING  heritage-accounting/view.blade.php
+    MISSING  heritage-admin/index.blade.php
+    MISSING  heritage-admin/region-info.blade.php
+    MISSING  heritage-admin/regions.blade.php
+    MISSING  heritage-admin/rule-add.blade.php
+    MISSING  heritage-admin/rule-edit.blade.php
+    MISSING  heritage-admin/rule-list.blade.php
+    MISSING  heritage-admin/standard-add.blade.php
+    MISSING  heritage-admin/standard-edit.blade.php
+    MISSING  heritage-admin/standard-list.blade.php
+    MISSING  heritage-report/asset-register.blade.php
+    MISSING  heritage-report/index.blade.php
+    MISSING  heritage-report/movement.blade.php
+    MISSING  heritage-report/valuation.blade.php
+    MISSING  landing-error.blade.php
+    MISSING  landing.blade.php
+    MISSING  leaderboard.blade.php
+    MISSING  my-access-requests.blade.php
+    MISSING  my-contributions.blade.php
+    MISSING  partials/_activity-section.blade.php
+    MISSING  partials/_admin-sidebar.blade.php
+    MISSING  partials/_contribute-button.blade.php
+    MISSING  partials/_entity-panel.blade.php
+    MISSING  partials/_filter-cards.blade.php
+    MISSING  partials/_heritage-accounting-menu.blade.php
+    MISSING  partials/_hero-section.blade.php
+    MISSING  partials/_recent-additions.blade.php
+    MISSING  partials/_stats-section.blade.php
+    MISSING  partials/_stories-section.blade.php
+    MISSING  request-access.blade.php
+    MISSING  review-contribution.blade.php
+    MISSING  review-queue.blade.php
+    MISSING  search-error.blade.php
+    MISSING  search.blade.php
+    MISSING  timeline.blade.php
+    MISSING  trending.blade.php
+
+  ahg-iiif-collection => openric-digital-object  (1 missing of 24)
+    MISSING  iiifCollection/new.blade.php
+
+  ahg-information-object-manage => openric-record-manage  (111 missing of 115)
+    MISSING  _3d-fullscreen-modal.blade.php
+    MISSING  _access-header.blade.php
+    MISSING  _accessions.blade.php
+    MISSING  _action-icons.blade.php
+    MISSING  _advanced-search.blade.php
+    MISSING  _alternative-identifiers-index.blade.php
+    MISSING  _book-cover-example.blade.php
+    MISSING  _calculate-dates-link.blade.php
+    MISSING  _card-view-results.blade.php
+    MISSING  _context-menu.blade.php
+    MISSING  _creator-detail.blade.php
+    MISSING  _creator.blade.php
+    MISSING  _dates.blade.php
+    MISSING  _dc-dates.blade.php
+    MISSING  _dc-names.blade.php
+    MISSING  _description-header.blade.php
+    MISSING  _digital-object-actions.blade.php
+    MISSING  _digital-object-metadata-header.blade.php
+    MISSING  _edit-actions.blade.php
+    MISSING  _edit-representation.blade.php
+    MISSING  _edit-subtitles.blade.php
+    MISSING  _event.blade.php
+    MISSING  _extended-rights-area.blade.php
+    MISSING  _extended-rights-context-menu.blade.php
+    MISSING  _finding-aid-link.blade.php
+    MISSING  _genre-access-points.blade.php
+    MISSING  _identifier-generator.blade.php
+    MISSING  _identifier-selector.blade.php
+    MISSING  _imageflow.blade.php
+    MISSING  _isbn-lookup.blade.php
+    MISSING  _item-physical-location-view.blade.php
+    MISSING  _item-physical-location.blade.php
+    MISSING  _merge-option.blade.php
+    MISSING  _name-access-points.blade.php
+    MISSING  _related-events.blade.php
+    MISSING  _related-material-descriptions.blade.php
+    MISSING  _research-tools-context-menu.blade.php
+    MISSING  _rights-badge.blade.php
+    MISSING  _show-audio.blade.php
+    MISSING  _show-compound.blade.php
+    MISSING  _show-download.blade.php
+    MISSING  _show-generic-icon.blade.php
+    MISSING  _show-image.blade.php
+    MISSING  _show-text.blade.php
+    MISSING  _show-video.blade.php
+    MISSING  _show3d.blade.php
+    MISSING  _stylesheet.blade.php
+    MISSING  _table-view-results.blade.php
+    MISSING  _tts-controls.blade.php
+    MISSING  add-cart.blade.php
+    MISSING  add-favorites.blade.php
+    MISSING  ai/extract.blade.php
+    MISSING  ai/review.blade.php
+    MISSING  ai/summarize.blade.php
+    MISSING  ai/translate.blade.php
+    MISSING  box-label-criteria.blade.php
+    MISSING  box-label.blade.php
+    MISSING  browse.blade.php
+    MISSING  calculate-dates-error.blade.php
+    MISSING  calculate-dates.blade.php
+    MISSING  create.blade.php
+    MISSING  delete-finding-aid.blade.php
+    MISSING  delete.blade.php
+    MISSING  digitalobject/delete.blade.php
+    MISSING  digitalobject/edit.blade.php
+    MISSING  digitalobject/metadata.blade.php
+    MISSING  digitalobject/rights.blade.php
+    MISSING  digitalobject/show.blade.php
+    MISSING  do-delete.blade.php
+    MISSING  do-edit.blade.php
+    MISSING  do-upload.blade.php
+    MISSING  edit-feedback.blade.php
+    MISSING  edit.blade.php
+    MISSING  findingaid/upload.blade.php
+    MISSING  import/select.blade.php
+    MISSING  import/skos-import.blade.php
+    MISSING  import/validate-csv.blade.php
+    MISSING  inventory.blade.php
+    MISSING  item-or-file-list-criteria.blade.php
+    MISSING  item-or-file-list-error.blade.php
+    MISSING  item-or-file-list.blade.php
+    MISSING  modifications.blade.php
+    MISSING  multi-file-update.blade.php
+    MISSING  partials/_rights-badges.blade.php
+    MISSING  partials/_treeview.blade.php
+    MISSING  partials/_upload-form.blade.php
+    MISSING  partials/feature-header.blade.php
+    MISSING  physical-objects.blade.php
+    MISSING  print.blade.php
+    MISSING  privacy/dashboard.blade.php
+    MISSING  privacy/redaction.blade.php
+    MISSING  privacy/scan.blade.php
+    MISSING  remove-cart.blade.php
+    MISSING  rename.blade.php
+    MISSING  reports.blade.php
+    MISSING  research/annotations.blade.php
+    MISSING  research/assessment.blade.php
+    MISSING  research/citation.blade.php
+    MISSING  research/dashboard.blade.php
+    MISSING  research/trust.blade.php
+    MISSING  rights/embargo.blade.php
+    MISSING  rights/extended.blade.php
+    MISSING  show.blade.php
+    MISSING  spectrum/heritage.blade.php
+    MISSING  spectrum/index.blade.php
+    MISSING  storage-locations-criteria.blade.php
+    MISSING  storage-locations-error.blade.php
+    MISSING  storage-locations.blade.php
+    MISSING  update-publication-status.blade.php
+    MISSING  upload-finding-aid.blade.php
+    MISSING  view-copyright-statement.blade.php
+
+  ahg-integrity => openric-integrity  (1 missing of 14)
+    MISSING  index.blade.php
+
+  ahg-jobs-manage => openric-jobs-manage  (2 missing of 7)
+    MISSING  delete.blade.php
+    MISSING  show.blade.php
+
+  ahg-label => openric-label  (1 missing of 2)
+    MISSING  batch.blade.php
+
+  ahg-provenance => openric-provenance  (5 missing of 5)
+    MISSING  edit.blade.php
+    MISSING  index.blade.php
+    MISSING  partials/_provenance-display.blade.php
+    MISSING  timeline.blade.php
+    MISSING  view.blade.php
+
+  ahg-reports => openric-reports  (6 missing of 53)
+    MISSING  audit-actor.blade.php
+    MISSING  audit-archival-description.blade.php
+    MISSING  audit-donor.blade.php
+    MISSING  audit-repository.blade.php
+    MISSING  audit-taxonomy.blade.php
+    MISSING  report-authorities.blade.php
+
+  ahg-repository-manage => openric-repository  (13 missing of 16)
+    MISSING  _context-menu.blade.php
+    MISSING  _holdings-institution.blade.php
+    MISSING  _holdings-list.blade.php
+    MISSING  _holdings.blade.php
+    MISSING  _logo.blade.php
+    MISSING  _maintained-actors.blade.php
+    MISSING  _stylesheet.blade.php
+    MISSING  _upload-limit.blade.php
+    MISSING  browse.blade.php
+    MISSING  delete.blade.php
+    MISSING  edit-theme.blade.php
+    MISSING  edit-upload-limit.blade.php
+    MISSING  upload-limit-exceeded.blade.php
+
+  ahg-research => openric-research  (19 missing of 106)
+    MISSING  research/project-collaborators.blade.php
+    MISSING  research/reproducibility-pack.blade.php
+    MISSING  research/request-correspond.blade.php
+    MISSING  research/request-triage.blade.php
+    MISSING  research/requests-dashboard.blade.php
+    MISSING  research/ro-crate.blade.php
+    MISSING  research/share-project.blade.php
+    MISSING  research/snapshots.blade.php
+    MISSING  research/source-assessment.blade.php
+    MISSING  research/timeline-builder.blade.php
+    MISSING  research/trust-score.blade.php
+    MISSING  research/view-activity.blade.php
+    MISSING  research/view-assertion.blade.php
+    MISSING  research/view-extraction-job.blade.php
+    MISSING  research/view-hypothesis.blade.php
+    MISSING  research/view-reproduction.blade.php
+    MISSING  research/view-room.blade.php
+    MISSING  research/view-snapshot.blade.php
+    MISSING  research/view-workspace.blade.php
+
+  ahg-search => openric-search  (1 missing of 21)
+    MISSING  search.blade.php
+
+  ahg-settings => openric-settings-manage  (29 missing of 72)
+    MISSING  _ahg-menu.blade.php
+    MISSING  _ahg-settings-landing.blade.php
+    MISSING  _dynamic-styles.blade.php
+    MISSING  _glam-dam-section.blade.php
+    MISSING  _glam-dam-tiff-pdf-merge.blade.php
+    MISSING  _i18n-form-field.blade.php
+    MISSING  _landing-page-widget.blade.php
+    MISSING  _menu.blade.php
+    MISSING  _metadata-settings.blade.php
+    MISSING  _multi-tenant-settings.blade.php
+    MISSING  _tiff-pdf-merge-dashboard.blade.php
+    MISSING  _tiff-pdf-merge-settings.blade.php
+    MISSING  ahg-import-settings.blade.php
+    MISSING  ahg-integration.blade.php
+    MISSING  ahg-section.blade.php
+    MISSING  ahg-settings.blade.php
+    MISSING  ahgDropdown/edit.blade.php
+    MISSING  ahgDropdown/index.blade.php
+    MISSING  ai-condition.blade.php
+    MISSING  analytics.blade.php
+    MISSING  cron-jobs.blade.php
+    MISSING  digital-object-derivatives.blade.php
+    MISSING  i18n-form-field.blade.php
+    MISSING  interface-label.blade.php
+    MISSING  language.blade.php
+    MISSING  menu.blade.php
+    MISSING  numbering-scheme-edit.blade.php
+    MISSING  plugins.blade.php
+    MISSING  template.blade.php
+
+  ahg-spectrum => openric-spectrum  (15 missing of 29)
+    MISSING  acquisitions.blade.php
+    MISSING  condition-admin.blade.php
+    MISSING  condition-photos.blade.php
+    MISSING  condition-risk.blade.php
+    MISSING  conditions.blade.php
+    MISSING  conservation.blade.php
+    MISSING  data-quality.blade.php
+    MISSING  grap-dashboard.blade.php
+    MISSING  loans.blade.php
+    MISSING  movements.blade.php
+    MISSING  my-tasks.blade.php
+    MISSING  object-entry.blade.php
+    MISSING  privacy-templates.blade.php
+    MISSING  security-compliance.blade.php
+    MISSING  valuations.blade.php
+
+  ahg-static-page => openric-static-page  (3 missing of 6)
+    MISSING  browse.blade.php
+    MISSING  home.blade.php
+    MISSING  list.blade.php
+
+  ahg-statistics => openric-statistics  (6 missing of 9)
+    MISSING  admin.blade.php
+    MISSING  bots.blade.php
+    MISSING  downloads.blade.php
+    MISSING  item.blade.php
+    MISSING  repository.blade.php
+    MISSING  views.blade.php
+
+  ahg-theme-b5 => openric-theme  (20 missing of 36)
+    MISSING  layout.blade.php
+    MISSING  layout_1col.blade.php
+    MISSING  layout_2col.blade.php
+    MISSING  layout_3col.blade.php
+    MISSING  partials/accessibility-statement.blade.php
+    MISSING  partials/feedback-tab.blade.php
+    MISSING  partials/google-analytics.blade.php
+    MISSING  partials/menus/ahg-admin-menu.blade.php
+    MISSING  partials/menus/browse-menu.blade.php
+    MISSING  partials/menus/clipboard-menu.blade.php
+    MISSING  partials/menus/glam-dam-menu.blade.php
+    MISSING  partials/menus/language-menu.blade.php
+    MISSING  partials/menus/main-menu.blade.php
+    MISSING  partials/menus/quick-links-menu.blade.php
+    MISSING  partials/menus/search-box.blade.php
+    MISSING  partials/menus/user-menu.blade.php
+    MISSING  partials/print-preview-bar.blade.php
+    MISSING  partials/privacy-message.blade.php
+    MISSING  partials/tag-manager.blade.php
+    MISSING  partials/voice-commands.blade.php
+
+  ahg-translation => openric-translation  (1 missing of 4)
+    MISSING  _translate-modal.blade.php
+
+  ahg-user-manage => openric-user-manage  (26 missing of 43)
+    MISSING  _acl-menu.blade.php
+    MISSING  _clipboard-extended-rights.blade.php
+    MISSING  _show-actions-mod-cas.blade.php
+    MISSING  _show-actions-mod-ext-auth.blade.php
+    MISSING  _show-actions-mod-standard.blade.php
+    MISSING  _show-actions.blade.php
+    MISSING  edit-success-mod-cas.blade.php
+    MISSING  edit-success-mod-ext-auth.blade.php
+    MISSING  edit-success-mod-standard.blade.php
+    MISSING  index-success-mod-cas.blade.php
+    MISSING  index-success-mod-ext-auth.blade.php
+    MISSING  index-success-mod-standard.blade.php
+    MISSING  list-success-mod-cas.blade.php
+    MISSING  list-success-mod-ext-auth.blade.php
+    MISSING  list-success-mod-standard.blade.php
+    MISSING  login-success-mod-cas.blade.php
+    MISSING  login-success-mod-ext-auth.blade.php
+    MISSING  login-success-mod-standard.blade.php
+    MISSING  pending.blade.php
+    MISSING  register.blade.php
+    MISSING  registration-pending.blade.php
+    MISSING  registration-register.blade.php
+    MISSING  registration-verify.blade.php
+    MISSING  user-view.blade.php
+    MISSING  verify.blade.php
+    MISSING  view.blade.php
+
+Done.

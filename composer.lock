@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "6f05f1edad11b98a676dd1379c160165",
+    "content-hash": "b7fd07a50a61525ca167c15778dbd07b",
     "packages": [
         {
             "name": "brick/math",
@@ -2532,6 +2532,37 @@
             "time": "2026-02-16T23:10:27+00:00"
         },
         {
+            "name": "openric/access-request",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-access-request",
+                "reference": "69b4a51d2a54b20a0273019b7d63e5db6d916672"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "openric/triplestore": "@dev"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRic\\AccessRequest\\Providers\\AccessRequestServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRic\\AccessRequest\\": "src/"
+                }
+            },
+            "description": "Access request management for OpenRiC (RiC-O data model)",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "openric/accession",
             "version": "dev-main",
             "dist": {
@@ -2667,6 +2698,75 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "Ollama embeddings, AI-assisted description for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/ai-governance",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-ai-governance",
+                "reference": "6dad8edb6dbc9178aa83cf18684c41238131e08c"
+            },
+            "require": {
+                "illuminate/database": "^12.0",
+                "illuminate/routing": "^12.0",
+                "illuminate/support": "^12.0",
+                "illuminate/view": "^12.0",
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\AiGovernance\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "OpenRiC\\AiGovernance\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "AI Governance Framework for OpenRiC - AI readiness, rights, provenance, and bias management",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/api",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-api",
+                "reference": "8973e242ae0783f1b2668f93326b30430cff1a07"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "openric/triplestore": "@dev"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRic\\Api\\Providers\\ApiServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRic\\Api\\": "src/"
+                }
+            },
+            "description": "REST API v1/v2 for OpenRiC with RiC-O data model",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -2810,6 +2910,37 @@
             }
         },
         {
+            "name": "openric/cart",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-cart",
+                "reference": "5d1f5e75ea2f467f842b0ad482a359bee0c69f51"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "openric/triplestore": "@dev"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRic\\Cart\\Providers\\CartServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRic\\Cart\\": "src/"
+                }
+            },
+            "description": "Digital marketplace & shopping cart for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "openric/condition",
             "version": "dev-main",
             "dist": {
@@ -2912,6 +3043,40 @@
             }
         },
         {
+            "name": "openric/data-migration",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-data-migration",
+                "reference": "5c561177bc9f0b56d3c6796f209eee19104f78ef"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\DataMigration\\Providers\\OpenRiCDataMigrationServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\DataMigration\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "CSV/data import, column mapping, transformation, and batch migration for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "openric/dedupe",
             "version": "dev-main",
             "dist": {
@@ -2976,6 +3141,40 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "OpenRiC Digital Object Management - rico:Instantiation CRUD, file upload, and linking to records",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/display",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-display",
+                "reference": "35cb99049d5c34a2b96bcc8898492ba70760cd1c"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Display\\Providers\\OpenRiCDisplayServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Display\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Display management: GLAM browse, type detection, display profiles, faceted search, CSV export",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -3085,6 +3284,40 @@
             }
         },
         {
+            "name": "openric/exhibition",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-exhibition",
+                "reference": "7449f6dbabcb0cce65b3d33f317c1f8e8ca7116d"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Exhibition\\Providers\\OpenRiCExhibitionServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Exhibition\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Exhibition management: virtual and physical exhibitions with items, dates, and locations",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "openric/export",
             "version": "dev-main",
             "dist": {
@@ -3188,6 +3421,40 @@
             }
         },
         {
+            "name": "openric/gallery",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-gallery",
+                "reference": "95194925f704fd2c5003dcfe430c16ae0739e4dd"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Gallery\\Providers\\OpenRiCGalleryServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Gallery\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Gallery management: curated collections of entities with ordering and featured galleries",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "openric/graph",
             "version": "dev-main",
             "dist": {
@@ -3251,6 +3518,41 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "Built-in help system with searchable topics for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/heritage",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-heritage",
+                "reference": "0f3528c4d0c6e5b8d1e515f8ce1ad272352af038"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "openric/triplestore": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Heritage\\Providers\\HeritageServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Heritage\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Heritage object management with RiC-O triplestore integration for OpenRiC",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -3388,6 +3690,40 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "Admin UI for managing Laravel queue jobs in OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/label",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-label",
+                "reference": "853dbdf9bbeaa1caa3b7a0a94bb739277fb35f6e"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Label\\Providers\\OpenRiCLabelServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Label\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Label and barcode printing for RiC entities: single and batch label generation with QR codes, barcodes, and configurable layouts",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -3533,6 +3869,105 @@
             }
         },
         {
+            "name": "openric/reports",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-reports",
+                "reference": "1cb47e6b5a9a7b798293b152ceea33a5b43ee1b9"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "openric/triplestore": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Reports\\Providers\\ReportsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Reports\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Reporting dashboard with SPARQL-based statistics and CSV export for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/repository",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-repository",
+                "reference": "1f3e1a97387126aa65257744524595b41aeb25a3"
+            },
+            "require": {
+                "illuminate/database": "^12.0",
+                "illuminate/routing": "^12.0",
+                "illuminate/support": "^12.0",
+                "illuminate/view": "^12.0",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Repository\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Repository management for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/research",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-research",
+                "reference": "a607eeac9d52879e941c4e6c7332b55e4dfa885b"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Research\\Providers\\ResearchServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Research\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Research workspaces, annotations, citations, and assessments for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "openric/research-request",
             "version": "dev-main",
             "dist": {
@@ -3561,6 +3996,70 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "Research request cart and approval workflow for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/ric",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/ric",
+                "reference": "7dfc08584b0c08a0ef87d5483c77a1988f67db99"
+            },
+            "require": {
+                "openric/core": "@dev"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRicRic\\Providers\\OpenRicRicServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRicRic\\": "src/"
+                }
+            },
+            "description": "Records in Contexts (RiC-O) integration for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/rights",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-rights",
+                "reference": "399c75a2ec2daf8c90730f573a852ba79553db7e"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Rights\\Providers\\RightsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Rights\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Rights statements, embargoes, and TK Labels for OpenRiC",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -3602,6 +4101,146 @@
             }
         },
         {
+            "name": "openric/settings-manage",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-settings-manage",
+                "reference": "f6dbdd992be3441ecaab2d7a2466b67a1aa77d7b"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\SettingsManage\\Providers\\SettingsManageServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\SettingsManage\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Admin UI for OpenRiC settings management (uses openric-core SettingsService)",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/spectrum",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-spectrum",
+                "reference": "2bd0e39b131f8235d0ed0ed1eb6b2ec5201a7b5c"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Spectrum\\Providers\\OpenRiCSpectrumServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Spectrum\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Spectrum 5.1 collections management procedures — all 21 procedures, workflow, condition checking, data quality, and export for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/static-page",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-static-page",
+                "reference": "c2bfed11ac7ef9af9bca31c8c1cd9647730598de"
+            },
+            "require": {
+                "league/commonmark": "^2.0",
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\StaticPage\\Providers\\OpenRiCStaticPageServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\StaticPage\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Static page management with Markdown rendering, i18n, and protected pages for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/statistics",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-statistics",
+                "reference": "d68e87afb139ff26bfb808e30be7a8f916f051d2"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "suggest": {
+                "geoip2/geoip2": "For GeoIP-based country/city resolution"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Statistics\\Providers\\OpenRiCStatisticsServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Statistics\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Usage statistics: views, downloads, geographic breakdown, bot filtering, CSV export for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "openric/theme",
             "version": "dev-main",
             "dist": {
@@ -3630,6 +4269,40 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "OpenRiC Bootstrap 5 Theme - layouts, navigation, and UI components for the OpenRiC archival platform",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/translation",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-translation",
+                "reference": "47c07ed61fd160f365147a468d43f616d581da17"
+            },
+            "require": {
+                "illuminate/support": "^11.0|^12.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\Translation\\Providers\\OpenRiCTranslationServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\Translation\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Machine translation package for OpenRiC — NLLB-200 integration with draft management, 19 languages, 21 translatable fields",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -3665,6 +4338,40 @@
                 "AGPL-3.0-or-later"
             ],
             "description": "Apache Jena Fuseki triplestore abstraction layer for OpenRiC",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "openric/user-manage",
+            "version": "dev-main",
+            "dist": {
+                "type": "path",
+                "url": "packages/openric-user-manage",
+                "reference": "0536a6d89ae3b93831659ac84a7ea599ac39dcb5"
+            },
+            "require": {
+                "openric/core": "@dev",
+                "php": "^8.3"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "OpenRiC\\UserManage\\Providers\\OpenRiCUserManageServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "OpenRiC\\UserManage\\": "src/"
+                }
+            },
+            "license": [
+                "AGPL-3.0-or-later"
+            ],
+            "description": "Enhanced admin user management for OpenRiC: browse, create, edit, deactivate, bulk actions",
             "transport-options": {
                 "symlink": true,
                 "relative": true
@@ -9423,40 +10130,61 @@
     "aliases": [],
     "minimum-stability": "stable",
     "stability-flags": {
-        "openric/core": 20,
-        "openric/triplestore": 20,
-        "openric/theme": 20,
-        "openric/auth": 20,
-        "openric/audit": 20,
-        "openric/record-manage": 20,
-        "openric/agent-manage": 20,
-        "openric/place-manage": 20,
-        "openric/activity-manage": 20,
-        "openric/instantiation-manage": 20,
-        "openric/search": 20,
-        "openric/ai": 20,
-        "openric/authority": 20,
-        "openric/condition": 20,
-        "openric/workflow": 20,
-        "openric/provenance": 20,
-        "openric/graph": 20,
-        "openric/export": 20,
-        "openric/digital-object": 20,
+        "openric/access-request": 20,
         "openric/accession": 20,
-        "openric/donor": 20,
-        "openric/dedupe": 20,
-        "openric/favorites": 20,
-        "openric/research-request": 20,
-        "openric/landing-page": 20,
-        "openric/feedback": 20,
-        "openric/dropdown-manage": 20,
-        "openric/custom-fields": 20,
+        "openric/activity-manage": 20,
+        "openric/agent-manage": 20,
+        "openric/ai": 20,
+        "openric/ai-governance": 20,
+        "openric/api": 20,
+        "openric/audit": 20,
+        "openric/auth": 20,
+        "openric/authority": 20,
         "openric/backup": 20,
-        "openric/jobs-manage": 20,
-        "openric/ingest": 20,
+        "openric/cart": 20,
+        "openric/condition": 20,
+        "openric/core": 20,
+        "openric/custom-fields": 20,
+        "openric/data-migration": 20,
+        "openric/dedupe": 20,
+        "openric/digital-object": 20,
+        "openric/display": 20,
         "openric/doi-manage": 20,
+        "openric/donor": 20,
+        "openric/dropdown-manage": 20,
+        "openric/exhibition": 20,
+        "openric/export": 20,
+        "openric/favorites": 20,
+        "openric/feedback": 20,
+        "openric/gallery": 20,
+        "openric/graph": 20,
+        "openric/help": 20,
+        "openric/heritage": 20,
+        "openric/ingest": 20,
+        "openric/instantiation-manage": 20,
         "openric/integrity": 20,
-        "openric/help": 20
+        "openric/jobs-manage": 20,
+        "openric/label": 20,
+        "openric/landing-page": 20,
+        "openric/place-manage": 20,
+        "openric/provenance": 20,
+        "openric/record-manage": 20,
+        "openric/reports": 20,
+        "openric/repository": 20,
+        "openric/research": 20,
+        "openric/research-request": 20,
+        "openric/ric": 20,
+        "openric/rights": 20,
+        "openric/search": 20,
+        "openric/settings-manage": 20,
+        "openric/spectrum": 20,
+        "openric/static-page": 20,
+        "openric/statistics": 20,
+        "openric/theme": 20,
+        "openric/translation": 20,
+        "openric/triplestore": 20,
+        "openric/user-manage": 20,
+        "openric/workflow": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

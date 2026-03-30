@@ -1,186 +1,239 @@
 <?php
 
-declare(strict_types=1);
+namespace OpenRic\Accession\Services;
 
-namespace OpenRiC\Accession\Services;
-
-use OpenRiC\Accession\Contracts\AccessionServiceInterface;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
-/**
- * Accession service — adapted from Heratio AccessionService (597 lines)
- * and AccessionBrowseService (121 lines).
- *
- * Heratio stores accessions in AtoM's object/accession/accession_i18n tables
- * with slug-based lookups and i18n support. Heratio also uses relation table
- * for donor links (type_id=167) and information_object links (type_id=174).
- *
- * OpenRiC stores accessions as operational data in PostgreSQL (accessions table)
- * with accession_items for line items. Links to archival records use IRIs
- * stored in the object_iri column, referencing Fuseki entities.
- */
-class AccessionService implements AccessionServiceInterface
+class AccessionService
 {
-    /**
-     * Browse accessions with pagination, filtering, and search.
-     *
-     * Adapted from Heratio AccessionBrowseService::browse() which queries
-     * accession + accession_i18n + object + slug with culture-based joins.
-     */
-    public function browse(array $params): array
+    protected string $culture;
+
+    public function __construct(string $culture = 'en')
     {
-        $page = max(1, (int) ($params['page'] ?? 1));
-        $limit = max(1, min(100, (int) ($params['limit'] ?? 25)));
-        $offset = ($page - 1) * $limit;
-        $sort = $params['sort'] ?? 'lastUpdated';
-        $sortDir = strtolower($params['sortDir'] ?? '') === 'asc' ? 'asc' : 'desc';
-        $subquery = trim($params['subquery'] ?? '');
-        $status = trim($params['status'] ?? '');
+        $this->culture = $culture;
+    }
 
-        $query = DB::table('accessions')
-            ->leftJoin('users as creator', 'accessions.created_by', '=', 'creator.id')
-            ->leftJoin('users as processor', 'accessions.processed_by', '=', 'processor.id');
-
-        // Search filter
-        if ($subquery !== '') {
-            $query->where(function ($q) use ($subquery) {
-                $q->where('accessions.title', 'ILIKE', "%{$subquery}%")
-                  ->orWhere('accessions.accession_number', 'ILIKE', "%{$subquery}%")
-                  ->orWhere('accessions.description', 'ILIKE', "%{$subquery}%");
-            });
+    /**
+     * Get an accession by slug with all related data.
+     */
+    public function getBySlug(string $slug): ?object
+    {
+        $objectId = DB::table('slug')->where('slug', $slug)->value('object_id');
+        if (!$objectId) {
+            return null;
         }
 
-        // Status filter
-        if ($status !== '') {
-            $query->where('accessions.processing_status', $status);
-        }
+        return $this->getById($objectId);
+    }
 
-        $total = $query->count();
-
-        // Sorting
-        switch ($sort) {
-            case 'alphabetic':
-                $query->orderBy('accessions.title', $sortDir);
-                break;
-            case 'identifier':
-                $query->orderBy('accessions.accession_number', $sortDir);
-                break;
-            case 'date':
-                $query->orderBy('accessions.received_date', $sortDir);
-                break;
-            case 'lastUpdated':
-            default:
-                $query->orderBy('accessions.updated_at', $sortDir);
-                break;
-        }
-
-        $rows = $query->select([
-                'accessions.id',
-                'accessions.accession_number',
-                'accessions.title',
-                'accessions.received_date',
-                'accessions.processing_status',
-                'accessions.extent',
-                'accessions.updated_at',
-                'creator.name as created_by_name',
-                'processor.name as processed_by_name',
+    /**
+     * Get an accession by ID with all fields joined.
+     */
+    public function getById(int $id): ?object
+    {
+        return DB::table('accession')
+            ->join('object', 'accession.id', '=', 'object.id')
+            ->join('slug', 'accession.id', '=', 'slug.object_id')
+            ->leftJoin('accession_i18n', function ($j) {
+                $j->on('accession.id', '=', 'accession_i18n.id')
+                    ->where('accession_i18n.culture', '=', $this->culture);
+            })
+            ->where('accession.id', $id)
+            ->select([
+                'accession.id',
+                'accession.identifier',
+                'accession.date',
+                'accession.acquisition_type_id',
+                'accession.processing_priority_id',
+                'accession.processing_status_id',
+                'accession.resource_type_id',
+                'accession.source_culture',
+                'accession_i18n.title',
+                'accession_i18n.scope_and_content',
+                'accession_i18n.appraisal',
+                'accession_i18n.archival_history',
+                'accession_i18n.location_information',
+                'accession_i18n.physical_characteristics',
+                'accession_i18n.processing_notes',
+                'accession_i18n.received_extent_units',
+                'accession_i18n.source_of_acquisition',
+                'object.created_at',
+                'object.updated_at',
+                'slug.slug',
             ])
-            ->offset($offset)
-            ->limit($limit)
-            ->get()
-            ->map(fn ($row) => (array) $row)
-            ->toArray();
+            ->first();
+    }
+
+    /**
+     * Get donors linked to an accession via relation table (type_id = 167).
+     */
+    public function getDonors(int $accessionId): \Illuminate\Support\Collection
+    {
+        return DB::table('relation')
+            ->join('actor_i18n', 'relation.subject_id', '=', 'actor_i18n.id')
+            ->join('slug', 'relation.subject_id', '=', 'slug.object_id')
+            ->where('relation.object_id', $accessionId)
+            ->where('relation.type_id', 167)
+            ->where('actor_i18n.culture', $this->culture)
+            ->select([
+                'relation.subject_id as id',
+                'actor_i18n.authorized_form_of_name as name',
+                'slug.slug',
+            ])
+            ->get();
+    }
+
+    /**
+     * Get the first (primary) donor for an accession.
+     */
+    public function getDonor(int $accessionId): ?object
+    {
+        return $this->getDonors($accessionId)->first();
+    }
+
+    /**
+     * Get deaccessions for an accession.
+     */
+    public function getDeaccessions(int $accessionId): \Illuminate\Support\Collection
+    {
+        return DB::table('deaccession')
+            ->join('deaccession_i18n', 'deaccession.id', '=', 'deaccession_i18n.id')
+            ->where('deaccession.accession_id', $accessionId)
+            ->where('deaccession_i18n.culture', $this->culture)
+            ->select([
+                'deaccession.id',
+                'deaccession.identifier',
+                'deaccession.date',
+                'deaccession.scope_id',
+                'deaccession_i18n.description',
+                'deaccession_i18n.extent',
+                'deaccession_i18n.reason',
+            ])
+            ->get();
+    }
+
+    /**
+     * Get form dropdown choices for accession edit/create forms.
+     */
+    public function getFormChoices(): array
+    {
+        $termLookup = function (int $taxonomyId) {
+            return DB::table('term')
+                ->leftJoin('term_i18n', function ($j) {
+                    $j->on('term.id', '=', 'term_i18n.id')
+                        ->where('term_i18n.culture', '=', $this->culture);
+                })
+                ->where('term.taxonomy_id', $taxonomyId)
+                ->select('term.id', 'term_i18n.name')
+                ->orderBy('term_i18n.name')
+                ->get();
+        };
+
+        // Event types for accession events (taxonomy 40)
+        $eventTypes = $termLookup(40);
+
+        // Alternative identifier types (taxonomy 66)
+        $altIdentifierTypes = $termLookup(66);
 
         return [
-            'hits'  => $rows,
-            'total' => $total,
-            'page'  => $page,
-            'limit' => $limit,
+            'acquisitionTypes' => $termLookup(63),
+            'processingPriorities' => $termLookup(64),
+            'processingStatuses' => $termLookup(65),
+            'resourceTypes' => $termLookup(62),
+            'eventTypes' => $eventTypes,
+            'altIdentifierTypes' => $altIdentifierTypes,
         ];
     }
 
     /**
-     * Find an accession by ID with full details.
-     *
-     * Adapted from Heratio AccessionService::getById() which joins
-     * accession + object + slug + accession_i18n with culture filter.
+     * Resolve a term name by ID.
      */
-    public function find(int $id): ?array
+    public function getTermName(?int $termId): ?string
     {
-        $row = DB::table('accessions')
-            ->leftJoin('users as creator', 'accessions.created_by', '=', 'creator.id')
-            ->leftJoin('users as processor', 'accessions.processed_by', '=', 'processor.id')
-            ->leftJoin('donors', 'accessions.donor_id', '=', 'donors.id')
-            ->where('accessions.id', $id)
-            ->select([
-                'accessions.*',
-                'creator.name as created_by_name',
-                'processor.name as processed_by_name',
-                'donors.name as donor_name',
-            ])
-            ->first();
-
-        if ($row === null) {
+        if (!$termId) {
             return null;
         }
 
-        $result = (array) $row;
-
-        // Get accession items
-        $result['items'] = DB::table('accession_items')
-            ->where('accession_id', $id)
-            ->orderBy('id')
-            ->get()
-            ->map(fn ($item) => (array) $item)
-            ->toArray();
-
-        return $result;
+        return DB::table('term_i18n')
+            ->where('id', $termId)
+            ->where('culture', $this->culture)
+            ->value('name');
     }
 
     /**
-     * Create a new accession.
-     *
-     * Adapted from Heratio AccessionService::create() which inserts into
-     * object, accession, accession_i18n, and slug tables (4 inserts in transaction).
-     * OpenRiC inserts into a single accessions table.
+     * Batch-resolve term names by IDs.
      */
-    public function create(array $data, int $userId): int
+    public function getTermNames(array $termIds): array
     {
-        return DB::transaction(function () use ($data, $userId): int {
-            $id = DB::table('accessions')->insertGetId([
-                'accession_number'    => $data['accession_number'] ?? $this->generateAccessionNumber(),
-                'title'               => $data['title'] ?? null,
-                'donor_id'            => !empty($data['donor_id']) ? (int) $data['donor_id'] : null,
-                'received_date'       => $data['received_date'] ?? null,
-                'description'         => $data['description'] ?? null,
-                'extent'              => $data['extent'] ?? null,
-                'condition_notes'     => $data['condition_notes'] ?? null,
-                'access_restrictions' => $data['access_restrictions'] ?? null,
-                'processing_status'   => $data['processing_status'] ?? 'pending',
-                'processed_by'        => null,
-                'processed_at'        => null,
-                'object_iri'          => $data['object_iri'] ?? null,
-                'created_by'          => $userId,
-                'created_at'          => now(),
-                'updated_at'          => now(),
+        if (empty($termIds)) {
+            return [];
+        }
+
+        return DB::table('term_i18n')
+            ->whereIn('id', $termIds)
+            ->where('culture', $this->culture)
+            ->pluck('name', 'id')
+            ->toArray();
+    }
+
+    /**
+     * Create a new accession with all related data.
+     *
+     * @return int The new accession ID
+     */
+    public function create(array $data): int
+    {
+        return DB::transaction(function () use ($data) {
+            // 1. Create object record
+            $id = DB::table('object')->insertGetId([
+                'class_name' => 'QubitAccession',
+                'created_at' => now(),
+                'updated_at' => now(),
+                'serial_number' => 0,
             ]);
 
-            // Create accession items if provided
-            if (!empty($data['items']) && is_array($data['items'])) {
-                foreach ($data['items'] as $item) {
-                    if (empty($item['description']) && empty($item['object_iri'])) {
-                        continue;
-                    }
-                    DB::table('accession_items')->insert([
-                        'accession_id' => $id,
-                        'object_iri'   => $item['object_iri'] ?? null,
-                        'description'  => $item['description'] ?? null,
-                        'quantity'     => (int) ($item['quantity'] ?? 1),
-                        'created_at'   => now(),
-                        'updated_at'   => now(),
-                    ]);
-                }
+            // 2. Create accession record
+            DB::table('accession')->insert([
+                'id' => $id,
+                'identifier' => $data['identifier'],
+                'date' => $data['date'] ?? null,
+                'acquisition_type_id' => $data['acquisition_type_id'] ?? null,
+                'processing_priority_id' => $data['processing_priority_id'] ?? null,
+                'processing_status_id' => $data['processing_status_id'] ?? null,
+                'resource_type_id' => $data['resource_type_id'] ?? null,
+                'source_culture' => $this->culture,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // 3. Create accession_i18n record
+            DB::table('accession_i18n')->insert([
+                'id' => $id,
+                'culture' => $this->culture,
+                'title' => $data['title'] ?? null,
+                'scope_and_content' => $data['scope_and_content'] ?? null,
+                'appraisal' => $data['appraisal'] ?? null,
+                'archival_history' => $data['archival_history'] ?? null,
+                'location_information' => $data['location_information'] ?? null,
+                'physical_characteristics' => $data['physical_characteristics'] ?? null,
+                'processing_notes' => $data['processing_notes'] ?? null,
+                'received_extent_units' => $data['received_extent_units'] ?? null,
+                'source_of_acquisition' => $data['source_of_acquisition'] ?? null,
+            ]);
+
+            // 4. Generate and insert slug
+            $baseSlug = Str::slug($data['title'] ?? $data['identifier'] ?? 'untitled');
+            $slug = $baseSlug;
+            $counter = 1;
+            while (DB::table('slug')->where('slug', $slug)->exists()) {
+                $slug = $baseSlug . '-' . $counter;
+                $counter++;
             }
+            DB::table('slug')->insert([
+                'object_id' => $id,
+                'slug' => $slug,
+            ]);
 
             return $id;
         });
@@ -188,233 +241,357 @@ class AccessionService implements AccessionServiceInterface
 
     /**
      * Update an existing accession.
-     *
-     * Adapted from Heratio AccessionService::update() which updates
-     * accession, accession_i18n (upsert), and object tables.
      */
     public function update(int $id, array $data): void
     {
-        DB::transaction(function () use ($id, $data): void {
-            $fields = [
-                'accession_number', 'title', 'donor_id', 'received_date',
-                'description', 'extent', 'condition_notes', 'access_restrictions',
-                'processing_status', 'processed_by', 'processed_at', 'object_iri',
+        DB::transaction(function () use ($id, $data) {
+            // 1. Update accession record
+            $accessionUpdate = [];
+            $accessionFields = [
+                'identifier', 'date', 'acquisition_type_id',
+                'processing_priority_id', 'processing_status_id', 'resource_type_id',
             ];
-
-            $update = [];
-            foreach ($fields as $field) {
+            foreach ($accessionFields as $field) {
                 if (array_key_exists($field, $data)) {
-                    $update[$field] = $data[$field];
+                    $accessionUpdate[$field] = $data[$field];
                 }
             }
-            $update['updated_at'] = now();
+            if (!empty($accessionUpdate)) {
+                DB::table('accession')->where('id', $id)->update($accessionUpdate);
+            }
 
-            DB::table('accessions')->where('id', $id)->update($update);
-
-            // Sync accession items if provided
-            if (array_key_exists('items', $data) && is_array($data['items'])) {
-                // Get existing item IDs
-                $existingIds = DB::table('accession_items')
-                    ->where('accession_id', $id)
-                    ->pluck('id')
-                    ->toArray();
-
-                $keepIds = [];
-                foreach ($data['items'] as $item) {
-                    if (empty($item['description']) && empty($item['object_iri'])) {
-                        continue;
-                    }
-
-                    if (!empty($item['id'])) {
-                        // Update existing item
-                        DB::table('accession_items')
-                            ->where('id', $item['id'])
-                            ->where('accession_id', $id)
-                            ->update([
-                                'object_iri'  => $item['object_iri'] ?? null,
-                                'description' => $item['description'] ?? null,
-                                'quantity'    => (int) ($item['quantity'] ?? 1),
-                                'updated_at'  => now(),
-                            ]);
-                        $keepIds[] = (int) $item['id'];
-                    } else {
-                        // Insert new item
-                        $newId = DB::table('accession_items')->insertGetId([
-                            'accession_id' => $id,
-                            'object_iri'   => $item['object_iri'] ?? null,
-                            'description'  => $item['description'] ?? null,
-                            'quantity'     => (int) ($item['quantity'] ?? 1),
-                            'created_at'   => now(),
-                            'updated_at'   => now(),
-                        ]);
-                        $keepIds[] = $newId;
-                    }
-                }
-
-                // Delete items not in the submitted set
-                $deleteIds = array_diff($existingIds, $keepIds);
-                if (!empty($deleteIds)) {
-                    DB::table('accession_items')->whereIn('id', $deleteIds)->delete();
+            // 2. Update accession_i18n (upsert)
+            $i18nFields = [
+                'title', 'scope_and_content', 'appraisal', 'archival_history',
+                'location_information', 'physical_characteristics', 'processing_notes',
+                'received_extent_units', 'source_of_acquisition',
+            ];
+            $i18nData = [];
+            foreach ($i18nFields as $field) {
+                if (array_key_exists($field, $data)) {
+                    $i18nData[$field] = $data[$field];
                 }
             }
+            if (!empty($i18nData)) {
+                $exists = DB::table('accession_i18n')
+                    ->where('id', $id)
+                    ->where('culture', $this->culture)
+                    ->exists();
+
+                if ($exists) {
+                    DB::table('accession_i18n')
+                        ->where('id', $id)
+                        ->where('culture', $this->culture)
+                        ->update($i18nData);
+                } else {
+                    DB::table('accession_i18n')->insert(array_merge(
+                        ['id' => $id, 'culture' => $this->culture],
+                        $i18nData
+                    ));
+                }
+            }
+
+            // 3. Touch the object record
+            DB::table('object')->where('id', $id)->update([
+                'updated_at' => now(),
+                'serial_number' => DB::raw('serial_number + 1'),
+            ]);
         });
     }
 
     /**
-     * Delete an accession and its items.
-     *
-     * Adapted from Heratio AccessionService::delete() which deletes from
-     * deaccession_i18n, deaccession, relation_i18n, relation, slug, object,
-     * accession_i18n, accession (8+ deletes in transaction).
-     * OpenRiC deletes from accession_items and accessions.
+     * Delete an accession and all related data.
      */
     public function delete(int $id): void
     {
-        DB::transaction(function () use ($id): void {
-            DB::table('accession_items')->where('accession_id', $id)->delete();
-            DB::table('accessions')->where('id', $id)->delete();
+        DB::transaction(function () use ($id) {
+            // 1. Delete deaccessions
+            $deaccessionIds = DB::table('deaccession')->where('accession_id', $id)->pluck('id')->toArray();
+            if (!empty($deaccessionIds)) {
+                DB::table('deaccession_i18n')->whereIn('id', $deaccessionIds)->delete();
+                DB::table('deaccession')->whereIn('id', $deaccessionIds)->delete();
+            }
+
+            // 2. Delete relations (donor link, etc.)
+            $relationIds = DB::table('relation')
+                ->where('subject_id', $id)
+                ->orWhere('object_id', $id)
+                ->pluck('id')
+                ->toArray();
+            if (!empty($relationIds)) {
+                DB::table('relation_i18n')->whereIn('id', $relationIds)->delete();
+                DB::table('relation')->whereIn('id', $relationIds)->delete();
+                DB::table('slug')->whereIn('object_id', $relationIds)->delete();
+                DB::table('object')->whereIn('id', $relationIds)->delete();
+            }
+
+            // 3. Delete accession_i18n
+            DB::table('accession_i18n')->where('id', $id)->delete();
+
+            // 4. Delete accession record
+            DB::table('accession')->where('id', $id)->delete();
+
+            // 5. Delete slug + object
+            DB::table('slug')->where('object_id', $id)->delete();
+            DB::table('object')->where('id', $id)->delete();
         });
     }
 
     /**
-     * Get recent accessions for dashboard.
-     *
-     * Adapted from Heratio AccessionController::dashboard() which queries
-     * accession + object for recently created records.
+     * Get accruals for an accession (accessions related to this one via ACCRUAL_ID = 173).
      */
-    public function getRecentAccessions(int $limit = 10): array
+    public function getAccruals(int $accessionId): \Illuminate\Support\Collection
     {
-        return DB::table('accessions')
-            ->leftJoin('users as creator', 'accessions.created_by', '=', 'creator.id')
+        return DB::table('relation')
+            ->join('accession', 'relation.subject_id', '=', 'accession.id')
+            ->leftJoin('accession_i18n', function ($j) {
+                $j->on('accession.id', '=', 'accession_i18n.id')
+                    ->where('accession_i18n.culture', '=', $this->culture);
+            })
+            ->join('slug', 'accession.id', '=', 'slug.object_id')
+            ->where('relation.object_id', $accessionId)
+            ->where('relation.type_id', 173)
             ->select([
-                'accessions.id',
-                'accessions.accession_number',
-                'accessions.title',
-                'accessions.received_date',
-                'accessions.processing_status',
-                'accessions.created_at',
-                'creator.name as created_by_name',
+                'accession.id',
+                'accession.identifier',
+                'accession_i18n.title',
+                'slug.slug',
             ])
-            ->orderBy('accessions.created_at', 'desc')
-            ->limit(max(1, min(100, $limit)))
-            ->get()
-            ->map(fn ($row) => (array) $row)
-            ->toArray();
+            ->get();
     }
 
     /**
-     * Get accession statistics for dashboard.
-     *
-     * Adapted from Heratio AccessionController::dashboard() which computes
-     * total, byStatus, byPriority, and recentCount from accession + term tables.
+     * Get the accession this one is an accrual to.
      */
-    public function getAccessionStats(): array
+    public function getAccrualTo(int $accessionId): \Illuminate\Support\Collection
     {
-        $total = DB::table('accessions')->count();
-
-        $byStatus = DB::table('accessions')
-            ->select('processing_status', DB::raw('COUNT(*) as count'))
-            ->groupBy('processing_status')
-            ->orderByDesc('count')
-            ->pluck('count', 'processing_status')
-            ->toArray();
-
-        $recentCount = DB::table('accessions')
-            ->where('created_at', '>=', now()->subDays(30))
-            ->count();
-
-        $totalItems = DB::table('accession_items')->count();
-
-        return [
-            'total'       => $total,
-            'byStatus'    => $byStatus,
-            'recentCount' => $recentCount,
-            'totalItems'  => $totalItems,
-        ];
+        return DB::table('relation')
+            ->join('accession', 'relation.object_id', '=', 'accession.id')
+            ->leftJoin('accession_i18n', function ($j) {
+                $j->on('accession.id', '=', 'accession_i18n.id')
+                    ->where('accession_i18n.culture', '=', $this->culture);
+            })
+            ->join('slug', 'accession.id', '=', 'slug.object_id')
+            ->where('relation.subject_id', $accessionId)
+            ->where('relation.type_id', 173)
+            ->select([
+                'accession.id',
+                'accession.identifier',
+                'accession_i18n.title',
+                'slug.slug',
+            ])
+            ->get();
     }
 
     /**
-     * Link an accession to a record IRI.
-     *
-     * Adapted from Heratio's relation table approach (type_id=174 for
-     * ACCESSION link). OpenRiC stores the IRI directly in object_iri column
-     * and also stores per-item links in accession_items.
+     * Get creators linked to an accession via relation table (type_id = 168 CREATION_ID).
      */
-    public function linkToRecord(int $accessionId, string $recordIri): void
+    public function getCreators(int $accessionId): \Illuminate\Support\Collection
     {
-        DB::table('accessions')
-            ->where('id', $accessionId)
-            ->update([
-                'object_iri'  => $recordIri,
-                'updated_at'  => now(),
-            ]);
+        return DB::table('relation')
+            ->join('actor_i18n', 'relation.subject_id', '=', 'actor_i18n.id')
+            ->join('slug', 'relation.subject_id', '=', 'slug.object_id')
+            ->where('relation.object_id', $accessionId)
+            ->where('relation.type_id', 168)
+            ->where('actor_i18n.culture', $this->culture)
+            ->select([
+                'relation.subject_id as id',
+                'actor_i18n.authorized_form_of_name as name',
+                'slug.slug',
+            ])
+            ->get();
     }
 
     /**
-     * Get all record IRIs linked to an accession.
-     *
-     * Adapted from Heratio AccessionService::getInformationObjects() which
-     * queries the relation table with type_id=174.
+     * Get dates for an accession from the event table.
      */
-    public function getLinkedRecords(int $accessionId): array
+    public function getDates(int $accessionId): \Illuminate\Support\Collection
     {
-        $records = [];
+        return DB::table('event')
+            ->leftJoin('event_i18n', function ($j) {
+                $j->on('event.id', '=', 'event_i18n.id')
+                    ->where('event_i18n.culture', '=', $this->culture);
+            })
+            ->leftJoin('term_i18n', function ($j) {
+                $j->on('event.type_id', '=', 'term_i18n.id')
+                    ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('event.object_id', $accessionId)
+            ->select([
+                'event.id',
+                'event.start_date',
+                'event.end_date',
+                'event_i18n.date as date_display',
+                'term_i18n.name as type_name',
+            ])
+            ->get();
+    }
 
-        // Main accession link
-        $accession = DB::table('accessions')
-            ->where('id', $accessionId)
-            ->select('object_iri')
-            ->first();
-
-        if ($accession !== null && !empty($accession->object_iri)) {
-            $records[] = [
-                'iri'         => $accession->object_iri,
-                'description' => 'Primary linked record',
-            ];
-        }
-
-        // Item-level links
-        $items = DB::table('accession_items')
-            ->where('accession_id', $accessionId)
-            ->whereNotNull('object_iri')
-            ->where('object_iri', '!=', '')
-            ->select('object_iri', 'description')
+    /**
+     * Get accession events.
+     */
+    public function getAccessionEvents(int $accessionId): \Illuminate\Support\Collection
+    {
+        $events = DB::table('accession_event')
+            ->leftJoin('accession_event_i18n', function ($j) {
+                $j->on('accession_event.id', '=', 'accession_event_i18n.id')
+                    ->where('accession_event_i18n.culture', '=', $this->culture);
+            })
+            ->leftJoin('term_i18n', function ($j) {
+                $j->on('accession_event.type_id', '=', 'term_i18n.id')
+                    ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('accession_event.accession_id', $accessionId)
+            ->select([
+                'accession_event.id',
+                'accession_event.date',
+                'term_i18n.name as type_name',
+                'accession_event_i18n.agent',
+            ])
             ->get();
 
-        foreach ($items as $item) {
-            $records[] = [
-                'iri'         => $item->object_iri,
-                'description' => $item->description ?? 'Accession item',
-            ];
+        // Get notes from the note table for each event
+        foreach ($events as $event) {
+            $event->note = DB::table('note')
+                ->leftJoin('note_i18n', function ($j) {
+                    $j->on('note.id', '=', 'note_i18n.id')
+                        ->where('note_i18n.culture', '=', $this->culture);
+                })
+                ->where('note.object_id', $event->id)
+                ->value('note_i18n.content');
         }
 
-        return $records;
+        return $events;
     }
 
     /**
-     * Generate the next accession number.
-     *
-     * Adapted from Heratio's AccessionController::numbering() pattern.
-     * Format: YYYY-NNN (e.g., 2026-001, 2026-002).
+     * Get alternative identifiers for an accession (from other_name table).
      */
-    public function generateAccessionNumber(string $prefix = ''): string
+    public function getAlternativeIdentifiers(int $accessionId): \Illuminate\Support\Collection
     {
-        if ($prefix === '') {
-            $prefix = date('Y');
-        }
+        return DB::table('other_name')
+            ->leftJoin('other_name_i18n', function ($j) {
+                $j->on('other_name.id', '=', 'other_name_i18n.id')
+                    ->where('other_name_i18n.culture', '=', $this->culture);
+            })
+            ->where('other_name.object_id', $accessionId)
+            ->select([
+                'other_name.id',
+                'other_name.type_id',
+                'other_name_i18n.name as identifier',
+                DB::raw("(SELECT ti.name FROM term_i18n ti WHERE ti.id = other_name.type_id AND ti.culture = '{$this->culture}' LIMIT 1) as label"),
+            ])
+            ->get();
+    }
 
-        $lastNumber = DB::table('accessions')
-            ->where('accession_number', 'LIKE', $prefix . '-%')
-            ->orderByRaw("CAST(SUBSTRING(accession_number FROM POSITION('-' IN accession_number) + 1) AS INTEGER) DESC")
-            ->value('accession_number');
+    /**
+     * Get information objects linked to an accession via relation (type_id = 174 ACCESSION_ID).
+     */
+    public function getInformationObjects(int $accessionId): \Illuminate\Support\Collection
+    {
+        return DB::table('relation')
+            ->join('information_object_i18n', function ($j) {
+                $j->on('relation.subject_id', '=', 'information_object_i18n.id')
+                    ->where('information_object_i18n.culture', '=', $this->culture);
+            })
+            ->join('slug', 'relation.subject_id', '=', 'slug.object_id')
+            ->where('relation.object_id', $accessionId)
+            ->where('relation.type_id', 174)
+            ->select([
+                'relation.subject_id as id',
+                'information_object_i18n.title',
+                'slug.slug',
+            ])
+            ->get();
+    }
 
-        if ($lastNumber !== null) {
-            $parts = explode('-', $lastNumber);
-            $seq = (int) end($parts) + 1;
-        } else {
-            $seq = 1;
-        }
+    /**
+     * Get rights records for an accession.
+     */
+    public function getRights(int $accessionId): \Illuminate\Support\Collection
+    {
+        return DB::table('relation')
+            ->join('rights', 'relation.object_id', '=', 'rights.id')
+            ->leftJoin('rights_i18n', function ($j) {
+                $j->on('rights.id', '=', 'rights_i18n.id')
+                    ->where('rights_i18n.culture', '=', $this->culture);
+            })
+            ->leftJoin('term_i18n', function ($j) {
+                $j->on('rights.basis_id', '=', 'term_i18n.id')
+                    ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->where('relation.subject_id', $accessionId)
+            ->where('relation.type_id', 168)
+            ->select([
+                'rights.id',
+                'rights.start_date',
+                'rights.end_date',
+                'term_i18n.name as basis_name',
+                'rights_i18n.rights_note',
+            ])
+            ->get();
+    }
 
-        return $prefix . '-' . str_pad((string) $seq, 3, '0', STR_PAD_LEFT);
+    /**
+     * Get physical objects linked to an accession via relation (type_id = 179 HAS_PHYSICAL_OBJECT_ID).
+     */
+    public function getPhysicalObjects(int $accessionId): \Illuminate\Support\Collection
+    {
+        return DB::table('relation')
+            ->join('physical_object', 'relation.subject_id', '=', 'physical_object.id')
+            ->leftJoin('physical_object_i18n', function ($j) {
+                $j->on('physical_object.id', '=', 'physical_object_i18n.id')
+                    ->where('physical_object_i18n.culture', '=', $this->culture);
+            })
+            ->leftJoin('term_i18n', function ($j) {
+                $j->on('physical_object.type_id', '=', 'term_i18n.id')
+                    ->where('term_i18n.culture', '=', $this->culture);
+            })
+            ->join('slug', 'physical_object.id', '=', 'slug.object_id')
+            ->where('relation.object_id', $accessionId)
+            ->where('relation.type_id', 179)
+            ->select([
+                'physical_object.id',
+                'physical_object_i18n.name',
+                'physical_object_i18n.location',
+                'term_i18n.name as type_name',
+                'slug.slug',
+            ])
+            ->get();
+    }
+
+    /**
+     * Get contact information for a donor.
+     */
+    public function getDonorContacts(int $actorId): \Illuminate\Support\Collection
+    {
+        return DB::table('contact_information')
+            ->leftJoin('contact_information_i18n', function ($j) {
+                $j->on('contact_information.id', '=', 'contact_information_i18n.id')
+                    ->where('contact_information_i18n.culture', '=', $this->culture);
+            })
+            ->where('contact_information.actor_id', $actorId)
+            ->select([
+                'contact_information.id',
+                'contact_information_i18n.contact_person',
+                'contact_information_i18n.street_address',
+                'contact_information_i18n.city',
+                'contact_information_i18n.region',
+                'contact_information_i18n.postal_code',
+                'contact_information_i18n.country_code',
+                'contact_information.telephone',
+                'contact_information.fax',
+                'contact_information.email',
+                'contact_information.website',
+            ])
+            ->get();
+    }
+
+    /**
+     * Get the slug for an accession ID.
+     */
+    public function getSlug(int $id): ?string
+    {
+        return DB::table('slug')->where('object_id', $id)->value('slug');
     }
 }

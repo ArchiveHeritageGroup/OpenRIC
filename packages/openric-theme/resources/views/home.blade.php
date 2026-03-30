@@ -1,10 +1,6 @@
-@extends('theme::layouts.2col')
+@extends('theme::layouts.1col')
 
 @section('title', 'Dashboard')
-
-@section('sidebar')
-    @include('theme::partials.sidebar')
-@endsection
 
 @section('content')
     <h1 class="h3 mb-4">OpenRiC Dashboard</h1>
@@ -57,6 +53,7 @@
                     <a href="#" class="list-group-item list-group-item-action">Create Record Set</a>
                     <a href="#" class="list-group-item list-group-item-action">Create Agent</a>
                     <a href="#" class="list-group-item list-group-item-action">Search</a>
+                    <a href="{{ url('/graph/overview') }}" class="list-group-item list-group-item-action"><i class="bi bi-share me-2"></i>Graph Explorer</a>
                 </div>
             </div>
         </div>

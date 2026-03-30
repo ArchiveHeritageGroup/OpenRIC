@@ -49,6 +49,7 @@ Route::prefix('admin/settings')->group(function () {
     Route::match(['get', 'post'], '/dam-tools', [SettingsController::class, 'damTools'])->name('settings.dam-tools');
     Route::match(['get', 'post'], '/page-elements', [SettingsController::class, 'pageElements'])->name('settings.page-elements');
     Route::match(['get', 'post'], '/error-log', [SettingsController::class, 'errorLog'])->name('settings.error-log');
+    Route::match(['get', 'post'], '/plugins', [SettingsController::class, 'plugins'])->name('settings.plugins');
 
     // OpenRiC group route must come before the catch-all {section} route
     Route::match(['get', 'post'], '/openric/{group}', [SettingsController::class, 'openricSection'])->name('settings.openric');

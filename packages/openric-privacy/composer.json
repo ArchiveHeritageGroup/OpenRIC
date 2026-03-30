@@ -1,0 +1,24 @@
+{
+    "name": "openric/privacy",
+    "description": "Privacy/GDPR compliance for OpenRiC — data subject rights, consent management",
+    "type": "library",
+    "license": "AGPL-3.0",
+    "require": {
+        "php": "^8.2",
+        "illuminate/support": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "OpenRiC\\Privacy\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "OpenRiC\\Privacy\\Providers\\PrivacyServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

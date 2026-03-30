@@ -18,7 +18,7 @@ class HeritageServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        Route::middleware(['web', 'auth.required'])
+        Route::middleware('web')
             ->group(__DIR__ . '/../../routes/web.php');
 
         $this->loadViewsFrom(__DIR__ . '/../../resources/views', 'heritage');

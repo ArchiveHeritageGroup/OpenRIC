@@ -107,51 +107,40 @@ class SettingsController extends Controller
 
     public function index()
     {
-        $scopes = DB::table('setting')
-            ->where('editable', 1)
-            ->select('scope')
-            ->distinct()
-            ->pluck('scope')
-            ->map(fn ($s) => $s ?? '_global')
-            ->unique()
-            ->sort()
-            ->values();
-
-        $scopeCards = $scopes->map(function ($scope) {
-            return (object) [
-                'key' => $scope,
-                'label' => $this->scopeLabels[$scope] ?? ucfirst(str_replace('_', ' ', $scope)),
-                'icon' => $this->scopeIcons[$scope] ?? 'fa-sliders-h',
-                'description' => $this->scopeDescriptions[$scope] ?? 'Manage ' . strtolower($this->scopeLabels[$scope] ?? str_replace('_', ' ', $scope)) . '.',
-                'count' => DB::table('setting')
-                    ->where('editable', 1)
-                    ->when($scope === '_global', fn ($q) => $q->whereNull('scope'), fn ($q) => $q->where('scope', $scope))
-                    ->count(),
-            ];
-        });
-
-        $openricGroups = collect();
-        if (Schema::hasTable('openric_settings')) {
-            $openricGroups = DB::table('openric_settings')
-                ->select('setting_group', DB::raw('COUNT(*) as cnt'))
-                ->groupBy('setting_group')
-                ->orderBy('setting_group')
-                ->get()
-                ->map(fn ($row) => (object) ['key' => $row->setting_group, 'label' => ucfirst(str_replace('_', ' ', $row->setting_group)), 'count' => $row->cnt]);
-        }
+        // Query the 'settings' table for actual groups with counts
+        $dbGroups = DB::table('settings')
+            ->select('group', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('group')
+            ->orderBy('group')
+            ->get()
+            ->map(fn ($row) => (object) ['key' => $row->group, 'label' => ucfirst(str_replace('_', ' ', $row->group)), 'count' => $row->cnt]);
 
         $groupIcons = [
             'accession' => 'fa-archive', 'ai_condition' => 'fa-robot', 'compliance' => 'fa-clipboard-check',
             'data_protection' => 'fa-shield-alt', 'email' => 'fa-envelope', 'encryption' => 'fa-key',
             'faces' => 'fa-user-circle', 'features' => 'fa-star', 'fuseki' => 'fa-project-diagram',
-            'general' => 'fa-cogs', 'iiif' => 'fa-images', 'ingest' => 'fa-upload',
+            'general' => 'fa-palette', 'iiif' => 'fa-images', 'ingest' => 'fa-upload',
             'integrity' => 'fa-check-double', 'jobs' => 'fa-tasks', 'media' => 'fa-photo-video',
             'metadata' => 'fa-database', 'multi_tenant' => 'fa-building', 'photos' => 'fa-camera',
             'portable_export' => 'fa-file-export', 'security' => 'fa-lock',
             'spectrum' => 'fa-clipboard-list', 'voice_ai' => 'fa-microphone',
         ];
 
-        return view('settings-manage::index', compact('scopeCards', 'openricGroups', 'groupIcons'));
+        // Build scope cards from actual settings groups (from settings table)
+        $scopeCards = $dbGroups->map(function ($group) use ($groupIcons) {
+            return (object) [
+                'key' => $group->key,
+                'label' => $this->scopeLabels[$group->key] ?? ucfirst(str_replace('_', ' ', $group->key)),
+                'icon' => $groupIcons[$group->key] ?? 'fa-cog',
+                'description' => $this->scopeDescriptions[$group->key] ?? 'Manage ' . strtolower($this->scopeLabels[$group->key] ?? str_replace('_', ' ', $group->key)) . '.',
+                'count' => $group->count,
+            ];
+        })->values();
+
+        // Build OpenRiC grouped settings (empty for now)
+        $openricGroups = collect([]);
+
+        return view('settings-manage::index', compact('scopeCards', 'dbGroups', 'groupIcons', 'openricGroups'));
     }
 
     // ─── Generic section handler ────────────────────────────────────────
@@ -170,34 +159,18 @@ class SettingsController extends Controller
             return redirect()->route($redirectMap[$section]);
         }
 
+        // Use OpenRiC settings table instead of AtoM 'setting' table
         $culture = app()->getLocale();
-        $isGlobal = ($section === '_global');
-
-        $query = DB::table('setting')
-            ->leftJoin('setting_i18n', function ($join) use ($culture): void {
-                $join->on('setting.id', '=', 'setting_i18n.id')
-                    ->where('setting_i18n.culture', '=', $culture);
-            })
-            ->where('setting.editable', 1);
-
-        if ($isGlobal) {
-            $query->whereNull('setting.scope');
-        } else {
-            $query->where('setting.scope', $section);
-        }
-
-        $settings = $query->select('setting.id', 'setting.name', 'setting.scope', 'setting_i18n.value')
-            ->orderBy('setting.name')
+        $settings = DB::table('settings')
+            ->where('group', $section)
+            ->orderBy('key')
             ->get();
 
         $sectionLabel = $this->scopeLabels[$section] ?? ucfirst(str_replace('_', ' ', $section));
 
         if ($request->isMethod('post')) {
-            foreach ($request->input('settings', []) as $id => $value) {
-                DB::table('setting_i18n')->updateOrInsert(
-                    ['id' => $id, 'culture' => $culture],
-                    ['value' => $value]
-                );
+            foreach ($request->input('settings', []) as $key => $value) {
+                $this->service->saveSetting($key, $section, $value ?? '', $culture);
             }
             return redirect()->route('settings.section', $section)->with('success', $sectionLabel . ' settings saved.');
         }
@@ -209,29 +182,25 @@ class SettingsController extends Controller
 
     public function defaultTemplate(Request $request)
     {
-        $culture = app()->getLocale();
         $menu = $this->buildMenu('default-template');
 
-        $templateSettings = DB::table('setting')
-            ->leftJoin('setting_i18n', function ($join) use ($culture): void {
-                $join->on('setting.id', '=', 'setting_i18n.id')
-                    ->where('setting_i18n.culture', '=', $culture);
-            })
-            ->where('setting.scope', 'default_template')
-            ->where('setting.editable', 1)
-            ->select('setting.id', 'setting.name', 'setting_i18n.value')
-            ->orderBy('setting.name')
-            ->get()
-            ->keyBy('name');
+        // Use OpenRiC settings table instead of AtoM 'setting' table
+        $defaults = [
+            'default_template_io' => 'isad',
+            'default_template_actor' => 'isaar',
+            'default_template_repository' => 'isdiah',
+        ];
 
         if ($request->isMethod('post')) {
-            foreach ($request->input('settings', []) as $id => $value) {
-                DB::table('setting_i18n')->updateOrInsert(
-                    ['id' => $id, 'culture' => $culture],
-                    ['value' => $value]
-                );
+            foreach ($defaults as $key => $default) {
+                $this->service->saveSetting($key, 'default_template', $request->input("settings.{$key}", $default), 'en');
             }
             return redirect()->route('settings.default-template')->with('success', 'Default templates saved.');
+        }
+
+        $templateSettings = [];
+        foreach ($defaults as $key => $default) {
+            $templateSettings[$key] = $this->service->getSetting($key, 'default_template', 'en') ?? $default;
         }
 
         $ioChoices = [
@@ -384,26 +353,18 @@ class SettingsController extends Controller
         $culture = app()->getLocale();
         $menu = $this->buildMenu('interface-labels');
 
+        // Use OpenRiC settings table
+        $settings = DB::table('settings')
+            ->where('group', 'ui_label')
+            ->orderBy('key')
+            ->get();
+
         if ($request->isMethod('post')) {
-            foreach ($request->input('settings', []) as $id => $value) {
-                DB::table('setting_i18n')->updateOrInsert(
-                    ['id' => $id, 'culture' => $culture],
-                    ['value' => $value]
-                );
+            foreach ($request->input('settings', []) as $key => $value) {
+                $this->service->saveSetting($key, 'ui_label', $value ?? '', $culture);
             }
             return redirect()->route('settings.interface-labels')->with('success', 'Interface labels saved.');
         }
-
-        $settings = DB::table('setting')
-            ->leftJoin('setting_i18n', function ($join) use ($culture): void {
-                $join->on('setting.id', '=', 'setting_i18n.id')
-                    ->where('setting_i18n.culture', '=', $culture);
-            })
-            ->where('setting.scope', 'ui_label')
-            ->where('setting.editable', 1)
-            ->select('setting.id', 'setting.name', 'setting_i18n.value')
-            ->orderBy('setting.name')
-            ->get();
 
         return view('settings-manage::interface-labels', compact('settings', 'menu'));
     }
@@ -415,25 +376,17 @@ class SettingsController extends Controller
         $culture = app()->getLocale();
         $menu = $this->buildMenu('visible-elements');
 
-        $settings = DB::table('setting')
-            ->leftJoin('setting_i18n', function ($join) use ($culture): void {
-                $join->on('setting.id', '=', 'setting_i18n.id')
-                    ->where('setting_i18n.culture', '=', $culture);
-            })
-            ->where('setting.scope', 'element_visibility')
-            ->where('setting.editable', 1)
-            ->select('setting.id', 'setting.name', 'setting_i18n.value')
-            ->orderBy('setting.name')
+        // Use OpenRiC settings table
+        $settings = DB::table('settings')
+            ->where('group', 'element_visibility')
+            ->orderBy('key')
             ->get()
-            ->keyBy('name');
+            ->keyBy('key');
 
         if ($request->isMethod('post')) {
-            foreach ($settings as $name => $setting) {
-                $value = $request->has("settings.{$setting->id}") ? '1' : '0';
-                DB::table('setting_i18n')->updateOrInsert(
-                    ['id' => $setting->id, 'culture' => $culture],
-                    ['value' => $value]
-                );
+            foreach ($settings as $key => $setting) {
+                $value = $request->has("settings.{$key}") ? '1' : '0';
+                $this->service->saveSetting($key, 'element_visibility', $value, $culture);
             }
             return redirect()->route('settings.visible-elements')->with('success', 'Visible elements saved.');
         }
@@ -452,53 +405,53 @@ class SettingsController extends Controller
 
     public function languages(Request $request)
     {
-        $culture = app()->getLocale();
         $menu = $this->buildMenu('languages');
 
-        $languages = DB::table('setting')
-            ->leftJoin('setting_i18n', function ($join) use ($culture): void {
-                $join->on('setting.id', '=', 'setting_i18n.id')
-                    ->where('setting_i18n.culture', '=', $culture);
-            })
-            ->where('setting.scope', 'i18n_languages')
-            ->where('setting.editable', 1)
-            ->select('setting.id', 'setting.name', 'setting_i18n.value')
-            ->orderBy('setting.name')
-            ->get();
+        // Scan lang/ directories for all available locales
+        $langDirs = array_filter(
+            array_map('basename', glob(lang_path('*'), GLOB_ONLYDIR)),
+            fn (string $d) => preg_match('/^[a-z]{2}(_[A-Z]{2})?(@\w+)?$/', $d)
+        );
+        sort($langDirs);
 
-        if ($request->isMethod('post') && $request->input('action') === 'add') {
-            $code = strtolower(trim($request->input('languageCode', '')));
-            if (preg_match('/^[a-z]{2,3}$/', $code)) {
-                $exists = DB::table('setting')
-                    ->where('scope', 'i18n_languages')
-                    ->where('name', $code)
-                    ->exists();
-                if (!$exists) {
-                    $id = DB::table('setting')->insertGetId([
-                        'name' => $code,
-                        'scope' => 'i18n_languages',
-                        'editable' => 1,
-                        'deleteable' => 1,
-                        'source_culture' => $culture,
-                        'serial_number' => 0,
-                    ]);
-                    DB::table('setting_i18n')->insert(['id' => $id, 'culture' => $culture, 'value' => $code]);
-                    return redirect()->route('settings.languages')->with('success', "Language '{$code}' added.");
-                }
-                return redirect()->route('settings.languages')->with('error', "Language '{$code}' already exists.");
+        // Load saved settings from DB (group = i18n_languages)
+        $saved = DB::table('settings')
+            ->where('group', 'i18n_languages')
+            ->pluck('value', 'key')
+            ->map(fn ($v) => json_decode($v, true))
+            ->toArray();
+
+        // POST — save enabled/disabled state for each locale
+        if ($request->isMethod('post')) {
+            $enabled = $request->input('enabled', []);
+
+            foreach ($langDirs as $code) {
+                $isRtl = in_array($code, ['ar', 'fa', 'he', 'ur'], true);
+                $data = [
+                    'name'      => ucfirst(\Locale::getDisplayLanguage($code, $code)),
+                    'enabled'   => in_array($code, $enabled, true),
+                    'direction' => $isRtl ? 'rtl' : 'ltr',
+                ];
+                DB::table('settings')->updateOrInsert(
+                    ['group' => 'i18n_languages', 'key' => $code],
+                    ['value' => json_encode($data), 'updated_at' => now()]
+                );
             }
-            return redirect()->route('settings.languages')->with('error', 'Invalid language code. Use 2-3 lowercase letters (e.g. en, fr, af).');
+
+            return redirect()->route('settings.languages')
+                ->with('success', count($enabled) . ' language(s) enabled for the navigation menu.');
         }
 
-        if ($request->isMethod('post') && $request->input('action') === 'delete') {
-            $deleteId = (int) $request->input('delete_id');
-            $setting = DB::table('setting')->where('id', $deleteId)->where('scope', 'i18n_languages')->first();
-            if ($setting && $setting->deleteable) {
-                DB::table('setting_i18n')->where('id', $deleteId)->delete();
-                DB::table('setting')->where('id', $deleteId)->delete();
-                return redirect()->route('settings.languages')->with('success', 'Language removed.');
-            }
-            return redirect()->route('settings.languages')->with('error', 'This language cannot be deleted.');
+        // Build display list: merge on-disk locales with saved state
+        $languages = [];
+        foreach ($langDirs as $code) {
+            $s = $saved[$code] ?? null;
+            $languages[] = [
+                'code'      => $code,
+                'name'      => $s['name'] ?? ucfirst(\Locale::getDisplayLanguage($code, $code)),
+                'enabled'   => $s['enabled'] ?? ($code === config('app.locale', 'en')),
+                'direction' => $s['direction'] ?? (in_array($code, ['ar', 'fa', 'he', 'ur'], true) ? 'rtl' : 'ltr'),
+            ];
         }
 
         return view('settings-manage::languages', compact('languages', 'menu'));
@@ -511,20 +464,19 @@ class SettingsController extends Controller
         $culture = app()->getLocale();
         $menu = $this->buildMenu('oai');
 
+        // Use OpenRiC settings table
+        $settings = DB::table('settings')
+            ->where('group', 'oai')
+            ->orderBy('key')
+            ->get();
+
         if ($request->isMethod('post')) {
-            foreach ($request->input('settings', []) as $name => $value) {
-                $setting = DB::table('setting')->where('name', $name)->where('scope', 'oai')->first();
-                if ($setting) {
-                    DB::table('setting_i18n')->updateOrInsert(
-                        ['id' => $setting->id, 'culture' => $culture],
-                        ['value' => $value ?? '']
-                    );
-                }
+            foreach ($request->input('settings', []) as $key => $value) {
+                $this->service->saveSetting($key, 'oai', $value ?? '', $culture);
             }
             return redirect()->route('settings.oai')->with('success', 'OAI repository settings saved.');
         }
 
-        $settings = $this->service->getOaiSettings($culture);
         return view('settings-manage::oai', compact('settings', 'menu'));
     }
 
@@ -627,55 +579,85 @@ class SettingsController extends Controller
 
     public function themes(Request $request)
     {
-        $themeKeys = [
-            'openric_theme_enabled', 'openric_primary_color', 'openric_secondary_color',
-            'openric_body_bg', 'openric_body_text',
-            'openric_footer_bg', 'openric_footer_text_color', 'openric_footer_copyright',
-            'openric_footer_disclaimer', 'openric_footer_system_name',
-            'openric_footer_org_name', 'openric_footer_org_url',
-            'openric_header_bg', 'openric_header_text',
-            'openric_card_header_bg', 'openric_card_header_text',
-            'openric_button_bg', 'openric_button_text',
-            'openric_link_color', 'openric_sidebar_bg', 'openric_sidebar_text',
-            'openric_logo_path', 'openric_show_branding', 'openric_custom_css',
-            'openric_success_color', 'openric_danger_color', 'openric_warning_color',
-            'openric_info_color', 'openric_light_color', 'openric_dark_color',
-            'openric_muted_color', 'openric_border_color',
+        // Map OpenRiC theme keys to our settings table structure (group/key)
+        $themeSettings = [
+            'theme' => [
+                'primary_color' => '#1a5276',
+                'secondary_color' => '#6c757d',
+                'header_bg' => '#212529',
+                'header_text' => '#ffffff',
+                'footer_bg' => '#212529',
+                'footer_text_color' => '#ffffff',
+                'sidebar_bg' => '#f8f9fa',
+                'sidebar_text' => '#333333',
+                'body_bg' => '#ffffff',
+                'body_text' => '#212529',
+                'link_color' => '#1a5276',
+                'success_color' => '#28a745',
+                'danger_color' => '#dc3545',
+                'warning_color' => '#ffc107',
+                'info_color' => '#17a2b8',
+                'custom_css' => '',
+            ],
         ];
 
+        $menu = $this->buildMenu('themes');
+
         if ($request->isMethod('post')) {
-            foreach ($themeKeys as $key) {
-                $value = $request->input($key, '');
-                DB::table('openric_settings')
-                    ->where('setting_key', $key)
-                    ->update(['setting_value' => $value]);
+            foreach ($request->input('settings', []) as $key => $value) {
+                $this->service->saveSetting($key, 'theme', (string) ($value ?? ''), 'en');
             }
             $this->regenerateThemeCss();
             return redirect()->route('settings.themes')->with('success', 'Theme settings saved.');
         }
 
-        $settings = DB::table('openric_settings')
-            ->whereIn('setting_key', $themeKeys)
-            ->pluck('setting_value', 'setting_key');
+        // Load existing settings from 'theme' group
+        $settings = [];
+        $rows = DB::table('settings')
+            ->where('group', 'theme')
+            ->pluck('value', 'key');
+        foreach ($themeSettings['theme'] as $key => $default) {
+            $settings[$key] = $rows[$key] ?? $default;
+        }
 
-        return view('settings-manage::themes', ['settings' => $settings]);
+        return view('settings-manage::themes', ['settings' => $settings, 'menu' => $menu]);
     }
 
     public function dynamicCss()
     {
-        $rows = DB::table('openric_settings')
-            ->where('setting_group', 'general')
-            ->pluck('setting_value', 'setting_key');
+        // Load theme settings from the 'settings' table (group='theme')
+        $rows = DB::table('settings')
+            ->where('group', 'theme')
+            ->pluck('value', 'key');
 
         $css = "/* OpenRiC Theme - Dynamic CSS */\n:root {\n";
-        $vars = $this->getThemeVars();
+
+        // Map OpenRiC theme keys to CSS variables
+        $vars = [
+            'primary_color' => ['--openric-primary', '#1a5276'],
+            'secondary_color' => ['--openric-secondary', '#6c757d'],
+            'header_bg' => ['--openric-header-bg', '#212529'],
+            'header_text' => ['--openric-header-text', '#ffffff'],
+            'footer_bg' => ['--openric-footer-bg', '#212529'],
+            'footer_text_color' => ['--openric-footer-text', '#ffffff'],
+            'sidebar_bg' => ['--openric-sidebar-bg', '#f8f9fa'],
+            'sidebar_text' => ['--openric-sidebar-text', '#333333'],
+            'body_bg' => ['--openric-background-light', '#ffffff'],
+            'body_text' => ['--openric-body-text', '#212529'],
+            'link_color' => ['--openric-link-color', '#1a5276'],
+            'success_color' => ['--openric-success', '#28a745'],
+            'danger_color' => ['--openric-danger', '#dc3545'],
+            'warning_color' => ['--openric-warning', '#ffc107'],
+            'info_color' => ['--openric-info', '#17a2b8'],
+        ];
+
         foreach ($vars as $key => [$var, $default]) {
             $css .= "    {$var}: " . ($rows[$key] ?? $default) . ";\n";
         }
         $css .= "}\n";
         $css .= $this->getThemeRules();
 
-        $customCss = $rows['openric_custom_css'] ?? '';
+        $customCss = $rows['custom_css'] ?? '';
         if (!empty(trim($customCss))) {
             $css .= "\n/* Custom CSS */\n" . $customCss . "\n";
         }
@@ -685,9 +667,10 @@ class SettingsController extends Controller
 
     private function regenerateThemeCss(): void
     {
-        $rows = DB::table('openric_settings')
-            ->where('setting_group', 'general')
-            ->pluck('setting_value', 'setting_key');
+        // Load theme settings from the 'settings' table (group='theme')
+        $rows = DB::table('settings')
+            ->where('group', 'theme')
+            ->pluck('value', 'key');
 
         $css = "/* OpenRiC Theme - Generated CSS */\n:root {\n";
         $vars = $this->getThemeVars();
@@ -699,52 +682,46 @@ class SettingsController extends Controller
 
         $dynamicPath = public_path('css/openric-theme-dynamic.css');
         $dir = dirname($dynamicPath);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            // Directory creation failed, skip writing file but don't fail
+            return;
         }
-        file_put_contents($dynamicPath, $css);
+        @file_put_contents($dynamicPath, $css);
     }
 
     private function getThemeVars(): array
     {
         return [
-            'openric_primary_color'    => ['--openric-primary', '#005837'],
-            'openric_secondary_color'  => ['--openric-secondary', '#37A07F'],
-            'openric_body_bg'          => ['--openric-background-light', '#ffffff'],
-            'openric_body_text'        => ['--openric-body-text', '#212529'],
-            'openric_footer_bg'        => ['--openric-footer-bg', '#005837'],
-            'openric_footer_text_color' => ['--openric-footer-text', '#ffffff'],
-            'openric_header_bg'        => ['--openric-header-bg', '#212529'],
-            'openric_header_text'      => ['--openric-header-text', '#ffffff'],
-            'openric_card_header_bg'   => ['--openric-card-header-bg', '#005837'],
-            'openric_card_header_text' => ['--openric-card-header-text', '#ffffff'],
-            'openric_button_bg'        => ['--openric-btn-bg', '#005837'],
-            'openric_button_text'      => ['--openric-btn-text', '#ffffff'],
-            'openric_link_color'       => ['--openric-link-color', '#005837'],
-            'openric_sidebar_bg'       => ['--openric-sidebar-bg', '#f8f9fa'],
-            'openric_sidebar_text'     => ['--openric-sidebar-text', '#333333'],
-            'openric_success_color'    => ['--openric-success', '#28a745'],
-            'openric_danger_color'     => ['--openric-danger', '#dc3545'],
-            'openric_warning_color'    => ['--openric-warning', '#ffc107'],
-            'openric_info_color'       => ['--openric-info', '#17a2b8'],
-            'openric_light_color'      => ['--openric-light', '#f8f9fa'],
-            'openric_dark_color'       => ['--openric-dark', '#343a40'],
-            'openric_muted_color'      => ['--openric-muted', '#6c757d'],
-            'openric_border_color'     => ['--openric-border', '#dee2e6'],
+            'primary_color'           => ['--openric-primary', '#1a5276'],
+            'secondary_color'         => ['--openric-secondary', '#6c757d'],
+            'body_bg'                 => ['--openric-background-light', '#ffffff'],
+            'body_text'               => ['--openric-body-text', '#212529'],
+            'footer_bg'               => ['--openric-footer-bg', '#212529'],
+            'footer_text_color'       => ['--openric-footer-text', '#ffffff'],
+            'header_bg'               => ['--openric-header-bg', '#212529'],
+            'header_text'             => ['--openric-header-text', '#ffffff'],
+            'link_color'              => ['--openric-link-color', '#1a5276'],
+            'sidebar_bg'              => ['--openric-sidebar-bg', '#f8f9fa'],
+            'sidebar_text'            => ['--openric-sidebar-text', '#333333'],
+            'success_color'           => ['--openric-success', '#28a745'],
+            'danger_color'            => ['--openric-danger', '#dc3545'],
+            'warning_color'           => ['--openric-warning', '#ffc107'],
+            'info_color'              => ['--openric-info', '#17a2b8'],
         ];
     }
 
     private function getThemeRules(): string
     {
-        return ".card-header { background-color: var(--openric-card-header-bg) !important; color: var(--openric-card-header-text) !important; }\n"
-            . ".card-header * { color: var(--openric-card-header-text) !important; }\n"
-            . ".btn-primary { background-color: var(--openric-btn-bg) !important; border-color: var(--openric-btn-bg) !important; color: var(--openric-btn-text) !important; }\n"
+        return ".card-header { background-color: var(--openric-primary) !important; color: #fff !important; }\n"
+            . ".card-header * { color: #fff !important; }\n"
+            . ".btn-primary { background-color: var(--openric-primary) !important; border-color: var(--openric-primary) !important; color: #fff !important; }\n"
             . ".btn-primary:hover, .btn-primary:focus { filter: brightness(0.9); }\n"
             . "a:not(.btn):not(.nav-link):not(.dropdown-item) { color: var(--openric-link-color); }\n"
             . ".sidebar, #sidebar-content { background-color: var(--openric-sidebar-bg) !important; color: var(--openric-sidebar-text) !important; }\n"
             . "body { background-color: var(--openric-background-light) !important; color: var(--openric-body-text) !important; }\n"
-            . "#top-bar { background-color: var(--openric-header-bg) !important; }\n"
-            . "#top-bar, #top-bar .navbar-brand, #top-bar .nav-link { color: var(--openric-header-text) !important; }\n";
+            . ".navbar { background-color: var(--openric-header-bg) !important; }\n"
+            . ".navbar, .navbar-brand, .navbar .nav-link { color: var(--openric-header-text) !important; }\n"
+            . "footer { background-color: var(--openric-footer-bg) !important; color: var(--openric-footer-text) !important; }\n";
     }
 
     // ─── OpenRiC Group Section (catch-all for grouped settings) ─────────
@@ -1195,5 +1172,25 @@ class SettingsController extends Controller
             'openric_light_color', 'openric_dark_color', 'openric_muted_color', 'openric_border_color',
             'openric_body_bg', 'openric_body_text',
         ];
+    }
+
+    // ─── Plugins ─────────────────────────────────────────────────────────
+
+    public function plugins()
+    {
+        $menu = $this->buildMenu('plugins');
+
+        // List installed plugins (placeholder - actual plugins would be in composer.json)
+        $plugins = [
+            ['name' => 'OpenRiC Core', 'version' => '1.0.0', 'description' => 'Core RiC-O functionality', 'enabled' => true],
+            ['name' => 'Record Management', 'version' => '1.0.0', 'description' => 'Record and record set management', 'enabled' => true],
+            ['name' => 'Agent Management', 'version' => '1.0.0', 'description' => 'Agent management (persons, families, corporate bodies)', 'enabled' => true],
+            ['name' => 'Place Management', 'version' => '1.0.0', 'description' => 'Place and location management', 'enabled' => true],
+            ['name' => 'Settings Management', 'version' => '1.0.0', 'description' => 'System configuration and settings', 'enabled' => true],
+            ['name' => '3D Model Viewer', 'version' => '1.0.0', 'description' => '3D model viewing and management', 'enabled' => false],
+            ['name' => 'Accession Management', 'version' => '1.0.0', 'description' => 'Accession and intake workflow', 'enabled' => true],
+        ];
+
+        return view('settings-manage::plugins', compact('plugins', 'menu'));
     }
 }

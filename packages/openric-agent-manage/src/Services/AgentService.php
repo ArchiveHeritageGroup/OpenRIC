@@ -126,20 +126,20 @@ class AgentService
         $sortField = match ($filters['sort'] ?? 'name') {
             'identifier' => '?identifier',
             'date' => '?datesOfExistence',
-            default => '?name',
+            default => '?title',
         };
         $sortDir = strtoupper($filters['direction'] ?? 'ASC') === 'DESC' ? 'DESC' : 'ASC';
 
         $sparql = <<<SPARQL
-            SELECT ?iri ?name ?identifier ?datesOfExistence ?entityType
+            SELECT ?iri ?title ?identifier ?datesOfExistence ?entityType
                    ?history ?legalStatus ?places ?functions
             WHERE {
                 ?iri a {$rdfType} .
                 OPTIONAL { ?iri rico:hasOrHadAgentName ?nameNode .
-                           ?nameNode rico:textualValue ?name .
+                           ?nameNode rico:textualValue ?title .
                            OPTIONAL { ?nameNode rico:isOrWasNameType ?nameType }
                            FILTER(!BOUND(?nameType) || ?nameType = "authorized") }
-                OPTIONAL { ?iri rico:title ?name }
+                OPTIONAL { ?iri rico:title ?title }
                 OPTIONAL { ?iri rico:identifier ?identifier }
                 OPTIONAL { ?iri rico:hasOrHadDemographicGroup ?datesOfExistence }
                 OPTIONAL { ?iri rico:hasAgentType ?entityType }

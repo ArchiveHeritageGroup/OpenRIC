@@ -22,7 +22,8 @@ class CheckAcl
             return redirect()->route('login');
         }
 
-        if (! $this->aclService->check(null, $action, Auth::id())) {
+        $userId = Auth::id();
+        if (! $userId || ! $this->aclService->check($userId, $action)) {
             abort(403, 'Insufficient permissions');
         }
 

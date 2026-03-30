@@ -8,6 +8,22 @@ use OpenRiC\Core\Contracts\StandardsMappingServiceInterface;
 
 class StandardsMappingService implements StandardsMappingServiceInterface
 {
+    /**
+     * Known prefix → full URI expansions for resolving prefixed property names
+     * against entity properties returned by the triplestore (which use full URIs).
+     */
+    private const PREFIX_MAP = [
+        'rico:' => 'https://www.ica.org/standards/RiC/ontology#',
+        'rdf:' => 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+        'rdfs:' => 'http://www.w3.org/2000/01/rdf-schema#',
+        'dcterms:' => 'http://purl.org/dc/terms/',
+        'skos:' => 'http://www.w3.org/2004/02/skos/core#',
+        'owl:' => 'http://www.w3.org/2002/07/owl#',
+        'xsd:' => 'http://www.w3.org/2001/XMLSchema#',
+        'prov:' => 'http://www.w3.org/ns/prov#',
+        'openric:' => 'https://ric.theahg.co.za/ontology#',
+    ];
+
     public function renderIsadG(array $entityProperties): array
     {
         $mapping = $this->getIsadgMapping();
@@ -17,9 +33,10 @@ class StandardsMappingService implements StandardsMappingServiceInterface
             $ricoProperty = $config['rico_property'];
             $value = null;
 
-            // Look for the property in entity data
-            if (isset($entityProperties[$ricoProperty])) {
-                $propValues = $entityProperties[$ricoProperty];
+            // Look for the property in entity data — try prefixed name first,
+            // then expand to full URI (getEntity() returns full URI keys).
+            $propValues = $this->resolveProperty($ricoProperty, $entityProperties);
+            if ($propValues !== null) {
                 if (is_array($propValues) && isset($propValues[0]['value'])) {
                     $value = implode('; ', array_column($propValues, 'value'));
                 } elseif (is_string($propValues)) {
@@ -48,8 +65,8 @@ class StandardsMappingService implements StandardsMappingServiceInterface
             $ricoProperty = $config['rico_property'];
             $value = null;
 
-            if (isset($entityProperties[$ricoProperty])) {
-                $propValues = $entityProperties[$ricoProperty];
+            $propValues = $this->resolveProperty($ricoProperty, $entityProperties);
+            if ($propValues !== null) {
                 if (is_array($propValues) && isset($propValues[0]['value'])) {
                     $value = implode('; ', array_column($propValues, 'value'));
                 } elseif (is_string($propValues)) {
@@ -136,6 +153,29 @@ class StandardsMappingService implements StandardsMappingServiceInterface
     public function getIsaarCpfMapping(): array
     {
         return config('openric.mappings.isaar_cpf', []);
+    }
+
+    /**
+     * Resolve a prefixed property name against entity properties.
+     * Tries the prefixed name first, then expands to the full URI.
+     */
+    private function resolveProperty(string $prefixedName, array $entityProperties): mixed
+    {
+        if (isset($entityProperties[$prefixedName])) {
+            return $entityProperties[$prefixedName];
+        }
+
+        foreach (self::PREFIX_MAP as $prefix => $uri) {
+            if (str_starts_with($prefixedName, $prefix)) {
+                $fullUri = $uri . substr($prefixedName, strlen($prefix));
+                if (isset($entityProperties[$fullUri])) {
+                    return $entityProperties[$fullUri];
+                }
+                break;
+            }
+        }
+
+        return null;
     }
 
     private function getIsadgArea(string $code): string

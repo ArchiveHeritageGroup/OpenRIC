@@ -5,89 +5,88 @@
 @section('content')
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1 class="h3"><i class="fas fa-language me-2"></i>Languages</h1>
+        <h1 class="h3"><i class="fas fa-language me-2"></i>I18n Languages</h1>
         <a href="{{ route('settings.index') }}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Back</a>
     </div>
 
     @if (session('success'))
         <div class="alert alert-success alert-dismissible fade show">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     @endif
+    @if (session('error'))
+        <div class="alert alert-danger alert-dismissible fade show">{{ session('error') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+    @endif
 
     <div class="card mb-3">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <h6 class="mb-0">Configured Languages</h6>
-            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="collapse" data-bs-target="#addLanguageForm"><i class="fas fa-plus me-1"></i> Add Language</button>
+        <div class="card-header">
+            <h6 class="mb-0"><i class="fas fa-globe me-1"></i> Available Languages</h6>
         </div>
         <div class="card-body">
-            <div class="collapse mb-3" id="addLanguageForm">
-                <form method="POST" action="{{ route('settings.languages') }}" class="border rounded p-3 bg-light">
-                    @csrf
-                    <input type="hidden" name="action" value="add">
-                    <div class="row align-items-end">
-                        <div class="col-md-3 mb-2">
-                            <label for="new_lang_code" class="form-label">Language Code</label>
-                            <input type="text" name="code" id="new_lang_code" class="form-control" placeholder="e.g. fr" maxlength="10" required>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <label for="new_lang_name" class="form-label">Language Name</label>
-                            <input type="text" name="name" id="new_lang_name" class="form-control" placeholder="e.g. French" required>
-                        </div>
-                        <div class="col-md-3 mb-2">
-                            <label for="new_lang_direction" class="form-label">Direction</label>
-                            <select name="direction" id="new_lang_direction" class="form-select">
-                                <option value="ltr">Left to Right</option>
-                                <option value="rtl">Right to Left</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2 mb-2">
-                            <button type="submit" class="btn btn-success w-100"><i class="fas fa-plus me-1"></i> Add</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
+            <p class="text-muted mb-3">
+                Select which languages appear in the navigation language dropdown.
+                Only languages with a <code>lang/</code> directory on disk are shown.
+                <strong>{{ count(array_filter($languages, fn($l) => $l['enabled'])) }}</strong> of <strong>{{ count($languages) }}</strong> enabled.
+            </p>
 
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Code</th>
-                            <th>Name</th>
-                            <th>Direction</th>
-                            <th>Default</th>
-                            <th style="width: 80px">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse ($settings['languages'] ?? [] as $lang)
-                        <tr>
-                            <td><code>{{ $lang['code'] }}</code></td>
-                            <td>{{ $lang['name'] }}</td>
-                            <td><span class="badge bg-secondary">{{ strtoupper($lang['direction'] ?? 'ltr') }}</span></td>
-                            <td>
-                                @if ($lang['is_default'] ?? false)
-                                    <span class="badge bg-success">Default</span>
-                                @endif
-                            </td>
-                            <td>
-                                @unless ($lang['is_default'] ?? false)
-                                <form method="POST" action="{{ route('settings.languages') }}" class="d-inline" onsubmit="return confirm('Remove {{ $lang['name'] }}?')">
-                                    @csrf
-                                    <input type="hidden" name="action" value="delete">
-                                    <input type="hidden" name="code" value="{{ $lang['code'] }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="fas fa-trash"></i></button>
-                                </form>
-                                @endunless
-                            </td>
-                        </tr>
-                        @empty
-                        <tr>
-                            <td colspan="5" class="text-center text-muted">No languages configured.</td>
-                        </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
+            <form method="POST" action="{{ route('settings.languages') }}">
+                @csrf
+
+                <div class="mb-3">
+                    <button type="button" class="btn btn-sm btn-outline-primary me-1" id="selectAll"><i class="fas fa-check-double me-1"></i>Select All</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary me-1" id="selectNone"><i class="fas fa-times me-1"></i>Select None</button>
+                    <button type="button" class="btn btn-sm btn-outline-info" id="selectSA"><i class="fas fa-flag me-1"></i>SA Official (11)</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0 align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width:50px" class="text-center">Show</th>
+                                <th style="width:80px">Code</th>
+                                <th>Native Name</th>
+                                <th>English Name</th>
+                                <th style="width:80px">Direction</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($languages as $lang)
+                            <tr>
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input lang-check"
+                                           name="enabled[]" value="{{ $lang['code'] }}"
+                                           {{ $lang['enabled'] ? 'checked' : '' }}>
+                                </td>
+                                <td><code>{{ $lang['code'] }}</code></td>
+                                <td>{{ $lang['name'] }}</td>
+                                <td class="text-muted">{{ ucfirst(\Locale::getDisplayLanguage($lang['code'], 'en')) }}</td>
+                                <td><span class="badge bg-{{ $lang['direction'] === 'rtl' ? 'warning' : 'secondary' }}">{{ strtoupper($lang['direction']) }}</span></td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i> Save Language Selection</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
+
+@push('js')
+<script>
+document.getElementById('selectAll').addEventListener('click', function() {
+    document.querySelectorAll('.lang-check').forEach(function(cb) { cb.checked = true; });
+});
+document.getElementById('selectNone').addEventListener('click', function() {
+    document.querySelectorAll('.lang-check').forEach(function(cb) { cb.checked = false; });
+});
+document.getElementById('selectSA').addEventListener('click', function() {
+    var sa = ['af','en','nr','ss','st','tn','ts','ve','xh','zu','nso'];
+    document.querySelectorAll('.lang-check').forEach(function(cb) {
+        cb.checked = sa.includes(cb.value);
+    });
+});
+</script>
+@endpush
 @endsection

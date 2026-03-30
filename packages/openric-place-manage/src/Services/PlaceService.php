@@ -18,10 +18,7 @@ class PlaceService implements PlaceServiceInterface
     public function browse(array $filters = [], int $limit = 25, int $offset = 0): array
     {
         $filterClauses = '';
-        $bindings = [
-            'limit' => (string) $limit,
-            'offset' => (string) $offset,
-        ];
+        $bindings = [];
 
         if (!empty($filters['q'])) {
             $filterClauses .= 'FILTER(CONTAINS(LCASE(?title), LCASE(?searchTerm)))' . "\n";
@@ -59,7 +56,7 @@ class PlaceService implements PlaceServiceInterface
                 {$filterClauses}
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
         $items = $this->triplestore->select($sparql, $bindings);
@@ -226,7 +223,7 @@ class PlaceService implements PlaceServiceInterface
 
     public function getForAgent(string $agentIri, int $limit = 25, int $offset = 0): array
     {
-        $sparql = <<<'SPARQL'
+        $sparql = <<<SPARQL
             PREFIX rico: <https://www.ica.org/standards/RiC/ontology#>
 
             SELECT ?iri ?title ?identifier ?placeType WHERE {
@@ -237,14 +234,10 @@ class PlaceService implements PlaceServiceInterface
                 OPTIONAL { ?iri rico:hasPlaceType ?placeType }
             }
             ORDER BY ?title
-            LIMIT ?limit OFFSET ?offset
+            LIMIT {$limit} OFFSET {$offset}
             SPARQL;
 
-        $items = $this->triplestore->select($sparql, [
-            'agentIri' => $agentIri,
-            'limit' => (string) $limit,
-            'offset' => (string) $offset,
-        ]);
+        $items = $this->triplestore->select($sparql, ['agentIri' => $agentIri]);
 
         $countSparql = <<<'SPARQL'
             PREFIX rico: <https://www.ica.org/standards/RiC/ontology#>
@@ -263,7 +256,7 @@ class PlaceService implements PlaceServiceInterface
 
     public function autocomplete(string $query, int $limit = 10): array
     {
-        $sparql = <<<'SPARQL'
+        $sparql = <<<SPARQL
             PREFIX rico: <https://www.ica.org/standards/RiC/ontology#>
 
             SELECT ?iri ?title ?placeType ?countryCode WHERE {
@@ -274,13 +267,10 @@ class PlaceService implements PlaceServiceInterface
                 OPTIONAL { ?iri rico:countryCode ?countryCode }
             }
             ORDER BY ?title
-            LIMIT ?limit
+            LIMIT {$limit}
             SPARQL;
 
-        return $this->triplestore->select($sparql, [
-            'query' => $query,
-            'limit' => (string) $limit,
-        ]);
+        return $this->triplestore->select($sparql, ['query' => $query]);
     }
 
     public function getPlaceTypes(): array
@@ -288,10 +278,10 @@ class PlaceService implements PlaceServiceInterface
         $sparql = <<<'SPARQL'
             PREFIX rico: <https://www.ica.org/standards/RiC/ontology#>
 
-            SELECT ?iri (SAMPLE(?label) AS ?label) (COUNT(?place) AS ?count) WHERE {
+            SELECT ?iri (SAMPLE(?rawLabel) AS ?label) (COUNT(?place) AS ?count) WHERE {
                 ?place a rico:Place .
                 ?place rico:hasPlaceType ?iri .
-                OPTIONAL { ?iri rico:title ?label }
+                OPTIONAL { ?iri rico:title ?rawLabel }
             }
             GROUP BY ?iri
             ORDER BY DESC(?count)
