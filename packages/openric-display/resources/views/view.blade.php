@@ -1,1 +1,0 @@
-@include('display::treeview-page')
